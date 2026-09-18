@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "economics-research-intelligence"
+version = "0.1.0"
+description = "Evidence-grounded monitoring of economics research across Chinese journal sites and international feeds"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = ["beautifulsoup4>=4.12", "PyYAML>=6", "requests>=2.31"]
+
+[project.scripts]
+research-radar = "research_radar.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["research_radar*"]
+
+[tool.setuptools.package-data]
+research_radar = ["data/*.yaml"]

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ResearchWork",
+  "type": "object",
+  "required": ["canonical_work_id", "title", "authors", "first_discovered_at", "versions", "analysis"],
+  "properties": {
+    "canonical_work_id": {"type": "string"},
+    "title": {"type": "string"},
+    "authors": {"type": "array", "items": {"type": "string"}},
+    "language": {"type": ["string", "null"]},
+    "journal": {"type": ["string", "null"]},
+    "first_discovered_at": {"type": "string", "format": "date-time"},
+    "first_public_version_at": {"type": ["string", "null"]},
+    "current_version_at": {"type": ["string", "null"]},
+    "journal_publication_at": {"type": ["string", "null"]},
+    "versions": {"type": "array", "items": {"$ref": "#/$defs/event"}},
+    "possible_links": {"type": "array", "items": {"type": "string"}},
+    "analysis": {"type": "object"}
+  },
+  "$defs": {
+    "event": {
+      "type": "object",
+      "required": ["fingerprint", "source_id", "source_name", "kind", "official_url", "visibility_source_url", "first_seen_at"],
+      "properties": {
+        "fingerprint": {"type": "string"},
+        "source_id": {"type": "string"},
+        "source_name": {"type": "string"},
+        "kind": {"enum": ["chinese_journal", "english_journal", "working_paper"]},
+        "status": {"type": ["string", "null"]},
+        "doi": {"type": ["string", "null"]},
+        "official_url": {"type": "string", "format": "uri"},
+        "visibility_source_url": {"type": "string", "format": "uri"},
+        "first_seen_at": {"type": "string", "format": "date-time"},
+        "published_online": {"type": ["string", "null"]},
+        "version_date": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

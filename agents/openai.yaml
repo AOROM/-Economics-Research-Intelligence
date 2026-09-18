@@ -1,0 +1,4 @@
+interface:
+  display_name: "Economics Research Intelligence"
+  short_description: "监控中文期刊官网与国际经济学研究动态"
+  default_prompt: "Use $economics-research-intelligence to configure my research radar. Ask only for missing research direction, official Chinese journal whitelist, international sources, schedule, and report requirements."

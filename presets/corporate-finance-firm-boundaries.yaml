@@ -1,0 +1,41 @@
+monitor_id: corporate-finance-firm-boundaries
+timezone: Asia/Shanghai
+topic:
+  statement: 企业边界、纵向一体化与融资约束之间的关系
+  include_concepts: [企业边界, 纵向一体化, 融资约束]
+  preferred_methods: [Staggered DID, IV]
+  preferred_datasets: [CSMAR, CNRDS, Compustat]
+
+# 中文期刊只会扫描这里明确填写的官网。空列表表示不监控任何中文期刊。
+chinese_monitor:
+  official_site_only: true
+  auto_expand_journals: false
+  allow_database_discovery: false
+  journals: []
+
+# CEPR 的 Discussion Papers RSS 在其官网列明。其它来源请先核实官方订阅地址再添加。
+international_monitor:
+  sources:
+    - provider: cepr
+      name: CEPR Discussion Papers
+      feed_url: https://cepr.org/rss/discussion-paper
+      priority: normal
+
+# 添加中文期刊的配置示意（请依据实际官网 HTML 填写，不要照抄选择器）：
+#   - name: 某经济学期刊
+#     homepage: https://journal.example.org/
+#     allowed_hosts: [journal.example.org]
+#     priority: critical
+#     surfaces:
+#       - label: 网络首发
+#         url: https://journal.example.org/online
+#         item_selector: .article-item
+#         title_selector: .article-title
+#         link_selector: .article-title a
+#         author_selector: .authors
+#         date_selector: .online-date
+#         next_selector: a.next
+#         max_pages: 20
+#         article:
+#           abstract_selector: .abstract
+#           doi_selector: .doi

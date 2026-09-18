@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Research Radar state",
+  "type": "object",
+  "required": ["schema_version", "monitor_id", "works", "source_scans"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "monitor_id": {"type": "string"},
+    "works": {"type": "object", "additionalProperties": {"$ref": "research_work.schema.json"}},
+    "source_scans": {"type": "object", "additionalProperties": {"type": "object"}}
+  }
+}

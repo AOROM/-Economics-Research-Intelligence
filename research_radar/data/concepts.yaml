@@ -1,0 +1,12 @@
+firm_boundaries:
+  zh: [企业边界, 纵向一体化, 垂直一体化, 纵向并购, 上下游并购, 产业链并购, 自制或外购, 外包, 内部化, 供应商收购]
+  en: [firm boundaries, vertical integration, vertical merger, make-or-buy, outsourcing, supplier acquisition, input sourcing, backward integration, forward integration]
+financial_friction:
+  zh: [融资约束, 信贷约束, 银行信贷, 信贷供给, 抵押融资, 融资便利]
+  en: [financial constraints, financing frictions, credit constraints, credit supply, bank lending, collateral constraints]
+corporate_investment:
+  zh: [企业投资, 资本开支, 投资效率]
+  en: [corporate investment, capital expenditure, investment efficiency]
+mergers:
+  zh: [企业并购, 收购, 并购重组]
+  en: [mergers and acquisitions, acquisition, merger]
