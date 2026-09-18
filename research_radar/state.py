@@ -46,7 +46,9 @@ def _candidate_score(observation: dict, work: dict) -> float:
     if observation.get("kind") == "chinese_journal" and not same_journal:
         return 0
     if not authors_a or not authors_b:
-        return 0
+        # A matching title without authors may suggest a lineage, but is never
+        # strong enough for automatic merging.
+        return 0.8 * similarity
     return 0.7 * similarity + 0.3 * overlap
 
 

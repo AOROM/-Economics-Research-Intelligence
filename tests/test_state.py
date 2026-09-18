@@ -70,6 +70,16 @@ class StateTests(unittest.TestCase):
         self.assertEqual(len(work["versions"]), 2)
         self.assertEqual(work["journal_publication_at"], "2026-09-18")
 
+    def test_title_only_link_is_held_for_review(self):
+        paper = observation(title="Credit Supply and Firm Boundaries", doi=None, source_id="cepr:dp", url="https://cepr.org/publications/dp1")
+        paper.update({"source_name": "CEPR", "kind": "working_paper", "journal": None, "language": "en", "authors": [], "status": "Working Paper"})
+        journal = observation(title="Credit Supply and Firm Boundaries", doi=None, source_id="journal:jf", url="https://journal.example/jf/1")
+        journal.update({"source_name": "Journal of Finance", "kind": "english_journal", "journal": "Journal of Finance", "language": "en", "authors": [], "status": "Published"})
+        state, _ = apply_observations(empty_state("m"), [ScanResult("cepr:dp", "CEPR", "working_paper", [paper], 1, "feed-snapshot")], self.topic, self.t1)
+        state, changes = apply_observations(state, [ScanResult("journal:jf", "Journal of Finance", "english_journal", [journal], 1, "feed-snapshot")], self.topic, self.t2)
+        self.assertEqual(len(state["works"]), 2)
+        self.assertEqual(len(changes["possible_links"]), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

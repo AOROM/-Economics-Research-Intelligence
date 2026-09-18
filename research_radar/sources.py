@@ -191,6 +191,8 @@ def parse_feed(xml: str, source: dict, observed_at: str) -> list[dict]:
             "published_online": published_day, "version_date": published,
             "abstract": summary, "observed_at": observed_at,
         })
+    if not result:
+        raise SourceError("Feed entries lack usable titles or official links")
     return result
 
 
