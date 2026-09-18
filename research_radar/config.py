@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -41,6 +42,16 @@ def load_config(path: str | Path) -> dict:
         if not name or name in names:
             raise ValueError("Chinese journal names must be present and unique")
         names.add(name)
+        status = journal.get("status", "active")
+        if status not in {"active", "pending"}:
+            raise ValueError(f"Unknown Chinese journal status: {name}")
+        if status == "pending":
+            if journal.get("surfaces"):
+                raise ValueError(f"Pending journal cannot have active surfaces: {name}")
+            homepage = urlsplit(journal.get("homepage") or "")
+            if homepage.scheme not in {"http", "https"} or not homepage.hostname:
+                raise ValueError(f"Pending journal requires a homepage: {name}")
+            continue
         homepage_host = official_host(journal["homepage"])
         hosts = journal.get("allowed_hosts") or [homepage_host]
         if homepage_host not in hosts:
@@ -48,9 +59,15 @@ def load_config(path: str | Path) -> dict:
         for surface in journal.get("surfaces", []):
             if not within_hosts(surface["url"], hosts):
                 raise ValueError(f"Surface is outside the official hosts: {name}")
-            for field in ("item_selector", "title_selector", "link_selector"):
-                if not surface.get(field):
-                    raise ValueError(f"{name} surface requires {field}")
+            if surface.get("link_path_regex"):
+                try:
+                    re.compile(surface["link_path_regex"])
+                except re.error as exc:
+                    raise ValueError(f"Invalid article URL pattern for {name}: {exc}") from exc
+            else:
+                for field in ("item_selector", "title_selector", "link_selector"):
+                    if not surface.get(field):
+                        raise ValueError(f"{name} surface requires {field} or link_path_regex")
         if not journal.get("surfaces"):
             raise ValueError(f"Chinese journal requires at least one official surface: {name}")
     source_ids = set()

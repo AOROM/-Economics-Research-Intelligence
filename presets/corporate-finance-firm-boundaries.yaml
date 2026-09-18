@@ -6,12 +6,83 @@ topic:
   preferred_methods: [Staggered DID, IV]
   preferred_datasets: [CSMAR, CNRDS, Compustat]
 
-# 中文期刊只会扫描这里明确填写的官网。空列表表示不监控任何中文期刊。
+# 用户指定的中文期刊白名单。pending 保留名单与官网，但不会被当成已扫描。
 chinese_monitor:
   official_site_only: true
   auto_expand_journals: false
   allow_database_discovery: false
-  journals: []
+  journals:
+    - name: 经济研究
+      homepage: https://erj.ajcass.com/
+      priority: critical
+      status: pending
+      note: 官网已定位，文章列表和翻页规则待核实
+    - name: 管理世界
+      homepage: http://www.mwm.net.cn/
+      priority: critical
+      status: pending
+      note: 杂志社官网只核实到 HTTP 地址，HTTPS 与文章目录待核实
+    - name: 经济学（季刊）
+      homepage: https://nsd.pku.edu.cn/xzyj/cbw/jjxjk/qkml/index.htm
+      priority: critical
+      status: pending
+      note: 北大官网期刊目录已定位，期次到论文的采集规则待核实
+    - name: 世界经济
+      homepage: https://sjjj.magtech.com.cn/
+      priority: critical
+      status: active
+      surfaces:
+        - label: 网络首发
+          url: https://sjjj.magtech.com.cn/CN/online_first
+          link_path_regex: /CN/abstract/abstract[0-9]+\.shtml
+          article_metadata: true
+        - label: 当期目录
+          url: https://sjjj.magtech.com.cn/CN/current
+          link_path_regex: /CN/Y20[0-9]{2}/V[0-9]+/I[0-9]+/[0-9]+
+          article_metadata: true
+    - name: 中国工业经济
+      homepage: https://ciejournal.ajcass.com/
+      priority: critical
+      status: pending
+      note: 官网已定位，当期目录和文章链接规则待核实
+    - name: 金融研究
+      homepage: https://www.jryj.org.cn/CN/1002-7246/home.shtml
+      priority: critical
+      status: active
+      surfaces:
+        - label: 当期目录
+          url: https://www.jryj.org.cn/CN/1002-7246/current.shtml
+          link_path_regex: /CN/abstract/abstract[0-9]+\.shtml
+          article_metadata: true
+    - name: 财贸经济
+      homepage: https://cmjj.ajcass.com/
+      priority: critical
+      status: pending
+      note: 杂志社官网已定位，文章列表和翻页规则待核实
+    - name: 数量经济技术经济研究
+      homepage: https://www.jqte.net/sljjjsjjyj/ch/index.aspx
+      priority: critical
+      status: pending
+      note: 编辑部官网已定位，最新目录文章链接规则待核实
+    - name: 经济学动态
+      homepage: https://jjxdt.ajcass.com/
+      priority: critical
+      status: pending
+      note: 官网访问受限，期刊目录和文章链接规则待核实
+    - name: 经济理论与经济管理
+      homepage: https://jjll.ruc.edu.cn/
+      priority: critical
+      status: pending
+      note: 人大期刊官网已定位，当前目录入口和文章链接规则待核实
+    - name: 财经研究
+      homepage: https://qks.sufe.edu.cn/J/CJYJ.html/CN
+      priority: critical
+      status: active
+      surfaces:
+        - label: 最新论文
+          url: https://qks.sufe.edu.cn/J/CJYJ.html/CN
+          link_path_regex: /J/CJYJ/Article/Details/[^/]+/CN
+          article_metadata: true
 
 # CEPR 的 Discussion Papers RSS 在其官网列明。其它来源请先核实官方订阅地址再添加。
 international_monitor:
@@ -21,7 +92,7 @@ international_monitor:
       feed_url: https://cepr.org/rss/discussion-paper
       priority: normal
 
-# 添加中文期刊的配置示意（请依据实际官网 HTML 填写，不要照抄选择器）：
+# 添加其它中文期刊的配置示意（请依据实际官网 HTML 填写，不要照抄选择器）：
 #   - name: 某经济学期刊
 #     homepage: https://journal.example.org/
 #     allowed_hosts: [journal.example.org]

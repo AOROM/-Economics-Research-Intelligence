@@ -60,6 +60,9 @@ def render_digest(config: dict, changes: dict, scans: list, failures: list[dict]
     for failure in failures:
         prior = previous.get("source_scans", {}).get(failure["source_id"], {})
         lines.append(f"- {failure['source_name']}：**覆盖不完整**；{failure['error']}；上次成功扫描：{prior.get('last_successful_scan_at') or '从未成功'}。")
+    for journal in config.get("chinese_monitor", {}).get("journals", []):
+        if journal.get("status") == "pending":
+            lines.append(f"- {journal['name']}：**待接入，尚未扫描**；{journal.get('note') or '官网采集规则待核实'}；[期刊页面]({journal['homepage']})。")
     if not scans:
         lines.append("- 本次没有可用的一手发现来源，不能据此判断没有新论文。")
     lines += ["", "## A. 与当前研究最相关的新论文", ""]

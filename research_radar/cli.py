@@ -19,7 +19,7 @@ def run(config_path: Path, workdir: Path) -> tuple[int, Path]:
     now = datetime.now(ZoneInfo(config.get("timezone", "Asia/Shanghai"))).isoformat(timespec="seconds")
     state_path = workdir / "state.json"
     previous = load_state(state_path, config["monitor_id"])
-    sources = [ChineseOfficialSource(j) for j in config["chinese_monitor"]["journals"]]
+    sources = [ChineseOfficialSource(j) for j in config["chinese_monitor"]["journals"] if j.get("status", "active") == "active"]
     sources.extend(InternationalFeedSource(s) for s in config.get("international_monitor", {}).get("sources", []))
     if not sources:
         raise ValueError("Configure at least one Chinese journal or international source")

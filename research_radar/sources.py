@@ -78,6 +78,36 @@ def date_text(value: str | None) -> str | None:
         return None
 
 
+def article_links(soup: BeautifulSoup, surface: dict, base: str) -> list[tuple[str, str, object]]:
+    """Find article links on a known official page by their verified URL shape."""
+    pattern = re.compile(surface["link_path_regex"])
+    matches: dict[str, tuple[str, str, object]] = {}
+    for anchor in soup.select("a[href]"):
+        article_url = urljoin(base, anchor["href"])
+        if not pattern.fullmatch(urlsplit(article_url).path):
+            continue
+        title = anchor.get_text(" ", strip=True)
+        if len(title) < 8 or title in {"摘要", "全文", "HTML 全文", "PDF 全文"}:
+            continue
+        key = url_key(article_url)
+        if key and (key not in matches or len(title) > len(matches[key][0])):
+            matches[key] = (title, article_url, anchor)
+    return list(matches.values())
+
+
+def citation_metadata(article: BeautifulSoup) -> dict:
+    def meta(name: str) -> str | None:
+        tag = article.select_one(f'meta[name="{name}"]')
+        return tag.get("content", "").strip() or None if tag else None
+
+    return {
+        "authors": [tag.get("content", "").strip() for tag in article.select('meta[name="citation_author"]') if tag.get("content", "").strip()],
+        "abstract": meta("citation_abstract") or meta("DC.description"),
+        "doi": extract_doi(meta("citation_doi")),
+        "date": meta("citation_online_date") or meta("citation_date") or meta("citation_publication_date"),
+    }
+
+
 class ChineseOfficialSource:
     def __init__(self, journal: dict, session: requests.Session | None = None):
         self.journal = journal
@@ -101,30 +131,36 @@ class ChineseOfficialSource:
                 visited.add(key or current)
                 soup = BeautifulSoup(fetch(current, self.hosts, self.session), "html.parser")
                 pages += 1
-                for item in soup.select(surface["item_selector"]):
-                    title = selected_text(item, surface["title_selector"])
-                    article_url = selected_link(item, surface["link_selector"], current)
+                if surface.get("link_path_regex"):
+                    items = article_links(soup, surface, current)
+                else:
+                    items = [(selected_text(item, surface["title_selector"]),
+                              selected_link(item, surface["link_selector"], current), item)
+                             for item in soup.select(surface["item_selector"])]
+                for title, article_url, item in items:
                     if not title or not article_url:
                         continue
                     if not within_hosts(article_url, self.hosts):
                         raise SourceError(f"Article URL outside official hosts: {article_url}")
                     detail = surface.get("article") or {}
-                    article_html = fetch(article_url, self.hosts, self.session) if detail else None
+                    article_html = fetch(article_url, self.hosts, self.session) if detail or surface.get("article_metadata") else None
                     article = BeautifulSoup(article_html, "html.parser") if article_html else None
-                    abstract = selected_text(article, detail.get("abstract_selector")) if article else None
+                    metadata = citation_metadata(article) if article else {}
+                    abstract = (selected_text(article, detail.get("abstract_selector")) or metadata.get("abstract")) if article else None
                     doi = extract_doi(selected_text(item, surface.get("doi_selector")))
                     if not doi and article:
-                        doi = extract_doi(selected_text(article, detail.get("doi_selector")) or article_html)
+                        doi = metadata.get("doi") or extract_doi(selected_text(article, detail.get("doi_selector")) or article_html)
                     authors = selected_text(item, surface.get("author_selector")) or (selected_text(article, detail.get("author_selector")) if article else None)
-                    date = selected_text(item, surface.get("date_selector")) or (selected_text(article, detail.get("date_selector")) if article else None)
+                    author_list = split_authors(authors) or metadata.get("authors", [])
+                    published = selected_text(item, surface.get("date_selector")) or (selected_text(article, detail.get("date_selector")) if article else None) or metadata.get("date")
                     observations.append({
                         "source_id": self.source_id, "source_name": self.journal["name"],
                         "kind": "chinese_journal", "language": "zh", "journal": self.journal["name"],
                         "priority": self.journal.get("priority", "normal"), "title": title,
-                        "authors": split_authors(authors), "doi": doi,
+                        "authors": author_list, "doi": doi,
                         "stable_id": item.get("data-article-id") or item.get("id") or url_key(article_url),
                         "official_url": article_url, "visibility_source_url": current,
-                        "status": surface["label"], "published_online": date_text(date),
+                        "status": surface["label"], "published_online": date_text(published),
                         "abstract": abstract, "observed_at": observed_at,
                     })
                 next_selector = surface.get("next_selector")
@@ -137,6 +173,8 @@ class ChineseOfficialSource:
                 if next_url and len(visited) >= max_pages:
                     raise SourceError(f"Pagination exceeded max_pages={max_pages}: {current}")
                 current = next_url
+        if not observations:
+            raise SourceError(f"No article links matched the configured official surfaces: {self.journal['name']}")
         return ScanResult(self.source_id, self.journal["name"], "chinese_journal", observations, pages, "official-surface")
 
 
