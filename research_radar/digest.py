@@ -63,6 +63,8 @@ def render_digest(config: dict, changes: dict, scans: list, failures: list[dict]
     for journal in config.get("chinese_monitor", {}).get("journals", []):
         if journal.get("status") == "pending":
             lines.append(f"- {journal['name']}：**待接入，尚未扫描**；{journal.get('note') or '官网采集规则待核实'}；[期刊页面]({journal['homepage']})。")
+        elif journal.get("status") == "blocked":
+            lines.append(f"- {journal['name']}：**官网外部阻塞，尚未扫描**；{journal.get('note')}；[期刊页面]({journal['homepage']})。")
     if not scans:
         lines.append("- 本次没有可用的一手发现来源，不能据此判断没有新论文。")
     lines += ["", "## A. 与当前研究最相关的新论文", ""]

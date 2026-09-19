@@ -32,12 +32,13 @@ international_monitor:
 
 
 class CliTests(unittest.TestCase):
-    def test_user_journal_whitelist_has_explicit_pending_coverage(self):
+    def test_user_journal_whitelist_has_explicit_official_coverage(self):
         preset = Path(__file__).parent.parent / "presets" / "corporate-finance-firm-boundaries.yaml"
         journals = load_config(preset)["chinese_monitor"]["journals"]
         self.assertEqual(len(journals), 11)
-        self.assertEqual(sum(j.get("status") == "active" for j in journals), 3)
-        self.assertEqual(sum(j.get("status") == "pending" for j in journals), 8)
+        self.assertEqual(sum(j.get("status") == "active" for j in journals), 10)
+        self.assertEqual(sum(j.get("status") == "pending" for j in journals), 0)
+        self.assertEqual(sum(j.get("status") == "blocked" for j in journals), 1)
 
     def test_pending_journal_is_reported_without_scanning(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -50,6 +51,7 @@ chinese_monitor:
   allow_database_discovery: false
   journals:
     - {name: 待接入期刊, homepage: 'http://journal.example/', status: pending, priority: critical}
+    - {name: 官网阻塞期刊, homepage: 'http://blocked.example/', status: blocked, priority: critical, note: 官网持续超时}
 international_monitor:
   sources:
     - {provider: cepr, name: CEPR, feed_url: 'https://cepr.org/rss/discussion-paper'}
@@ -59,6 +61,7 @@ international_monitor:
             self.assertEqual(code, 0)
             scan.assert_not_called()
             self.assertIn("待接入，尚未扫描", digest.read_text(encoding="utf-8"))
+            self.assertIn("官网外部阻塞，尚未扫描", digest.read_text(encoding="utf-8"))
 
     def test_partial_run_preserves_failed_source_and_marks_coverage(self):
         with tempfile.TemporaryDirectory() as temp:

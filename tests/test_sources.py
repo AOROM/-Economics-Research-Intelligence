@@ -1,6 +1,8 @@
 from pathlib import Path
+import json
 import unittest
 
+from research_radar.normalize import url_key
 from research_radar.sources import ChineseOfficialSource, SourceError, parse_feed
 
 
@@ -80,6 +82,74 @@ class SourceTests(unittest.TestCase):
         }]}
         with self.assertRaisesRegex(SourceError, "No article links matched"):
             ChineseOfficialSource(journal, EmptySession()).scan("2026-09-18T09:00:00+08:00")
+
+    def test_same_host_http_article_link_is_upgraded(self):
+        class MixedLinkSession:
+            def get(self, url, **kwargs):
+                page = '<div class="paper"><a class="title" href="http://journal.example/paper/a1">企业融资约束研究</a></div>'
+                return FakeResponse(url, page)
+
+        journal = {"name": "测试经济学期刊", "homepage": "https://journal.example", "surfaces": [{
+            "label": "当期目录", "url": "https://journal.example/current", "item_selector": ".paper",
+            "title_selector": ".title", "link_selector": ".title",
+        }]}
+        scan = ChineseOfficialSource(journal, MixedLinkSession()).scan("2026-09-18T09:00:00+08:00")
+        self.assertEqual(scan.observations[0]["official_url"], "https://journal.example/paper/a1")
+
+    def test_ajcass_current_issue_api_and_detail(self):
+        class ApiSession:
+            def get(self, url, **kwargs):
+                payload = {"code": 200, "data": {"year": 2026, "issue": 7, "issueInfoList": [
+                    {"id": 42, "title": "企业边界与融资约束", "authors": "张三，李四", "year": 2026, "issue": 7}
+                ]}}
+                return FakeResponse(url, json.dumps(payload, ensure_ascii=False))
+
+            def post(self, url, **kwargs):
+                self.body = kwargs["json"]
+                payload = {"code": 200, "data": {"issueContentInfoResult": {
+                    "authors": "张三，李四", "abstract": "<p>本文研究企业边界。</p>", "doi": "10.1234/api.42"
+                }}}
+                return FakeResponse(url, json.dumps(payload, ensure_ascii=False))
+
+        journal = {
+            "name": "测试经济学期刊", "homepage": "https://journal.example", "adapter": "ajcass_api",
+            "allowed_hosts": ["journal.example", "api.example"], "api_url": "https://api.example/api",
+            "journal_id": 123, "detail_url_template": "https://journal.example/#/issue?id={id}&year={year}&issue={issue}",
+        }
+        scan = ChineseOfficialSource(journal, ApiSession()).scan("2026-09-18T09:00:00+08:00")
+        self.assertEqual(len(scan.observations), 1)
+        self.assertEqual(scan.observations[0]["authors"], ["张三", "李四"])
+        self.assertEqual(scan.observations[0]["abstract"], "本文研究企业边界。")
+        self.assertEqual(scan.observations[0]["doi"], "10.1234/api.42")
+        self.assertIn("#/issue?", scan.observations[0]["official_url"])
+
+    def test_pku_issue_index_to_article_downloads(self):
+        issue_id = "a" * 32
+
+        class PkuSession:
+            def get(self, url, **kwargs):
+                if url.endswith("index.htm"):
+                    return FakeResponse(url, f'<a href="{issue_id}.htm">经济学（季刊）第26卷第4期</a>')
+                page = '''<meta name="PubDate" content="2026-07-30 06:31:00">
+                <p>数据收集、个性化定价与企业创新激励<em>(<a href="/docs/paper.pdf">全文下载</a>)</em></p>
+                <p>…………尹振东 马昕 寇宗来/1001</p>'''
+                return FakeResponse(url, page)
+
+        journal = {
+            "name": "经济学（季刊）", "homepage": "https://nsd.pku.edu.cn/index.htm", "adapter": "pku_issue",
+            "issue_index_url": "https://nsd.pku.edu.cn/index.htm",
+            "issue_link_regex": rf"/{issue_id}\.htm", "allowed_hosts": ["nsd.pku.edu.cn"],
+        }
+        scan = ChineseOfficialSource(journal, PkuSession()).scan("2026-09-18T09:00:00+08:00")
+        self.assertEqual(scan.pages, 2)
+        self.assertEqual(scan.observations[0]["title"], "数据收集、个性化定价与企业创新激励")
+        self.assertEqual(scan.observations[0]["authors"], ["尹振东", "马昕", "寇宗来"])
+        self.assertEqual(scan.observations[0]["published_online"], "2026-07-30")
+
+    def test_hash_route_is_part_of_stable_url_key(self):
+        first = url_key("https://journal.example/#/issue?id=1&year=2026")
+        second = url_key("https://journal.example/#/issue?id=2&year=2026")
+        self.assertNotEqual(first, second)
 
     def test_cepr_feed(self):
         source = {"id": "cepr:dp", "provider": "cepr", "name": "CEPR", "feed_url": "https://cepr.org/rss/discussion-paper"}

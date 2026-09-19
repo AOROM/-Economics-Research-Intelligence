@@ -31,7 +31,16 @@ def url_key(value: str | None) -> str | None:
         return None
     query = urlencode(sorted((k, v) for k, v in parse_qsl(parts.query) if not k.lower().startswith(("utm_", "fbclid", "gclid"))))
     path = parts.path.rstrip("/") or "/"
-    return urlunsplit(("https", parts.netloc.lower(), path, query, ""))
+    fragment = ""
+    # Several official journal SPAs use hash routes for article pages. Keeping
+    # those routes prevents every article from collapsing to the homepage key.
+    if parts.fragment.startswith("/"):
+        route = urlsplit(parts.fragment)
+        route_query = urlencode(sorted(parse_qsl(route.query)))
+        fragment = route.path.rstrip("/") or "/"
+        if route_query:
+            fragment += "?" + route_query
+    return urlunsplit(("https", parts.netloc.lower(), path, query, fragment))
 
 
 def stable_hash(*parts: str) -> str:
