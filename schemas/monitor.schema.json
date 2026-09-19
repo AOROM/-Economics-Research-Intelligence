@@ -6,6 +6,31 @@
   "properties": {
     "monitor_id": {"type": "string", "minLength": 1},
     "timezone": {"type": "string"},
+    "summarization": {
+      "type": "object",
+      "properties": {
+        "mode": {"enum": ["extractive", "model"]},
+        "endpoint": {"type": "string", "format": "uri"},
+        "model": {"type": "string", "minLength": 1},
+        "api_key_env": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "max_model_calls": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "max_attempts": {"type": "integer", "minimum": 1, "maximum": 10},
+        "max_input_chars": {"type": "integer", "minimum": 2000, "maximum": 200000},
+        "max_output_tokens": {"type": "integer", "minimum": 500, "maximum": 16000},
+        "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 120}
+      },
+      "allOf": [{"if": {"properties": {"mode": {"const": "model"}}, "required": ["mode"]}, "then": {"required": ["endpoint", "model"]}}]
+    },
+    "email": {
+      "type": "object",
+      "properties": {
+        "subject_prefix": {"type": "string", "pattern": "^[^\\r\\n]*$"},
+        "from": {"type": "string", "pattern": "^[^\\r\\n]*$"},
+        "to": {"type": "string", "pattern": "^[^\\r\\n]*$"},
+        "greeting": {"type": "string", "pattern": "^[^\\r\\n]*$"},
+        "signature": {"type": "string", "pattern": "^[^\\r\\n]*$"}
+      }
+    },
     "topic": {
       "type": "object",
       "required": ["statement"],

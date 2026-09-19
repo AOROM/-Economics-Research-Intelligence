@@ -136,6 +136,10 @@ def split_authors(value: str | None) -> list[str]:
     parts = [v.strip() for v in re.split(r"\s*(?:,|，|;|；|、|\band\b|和|\u3000+)\s*", value) if v.strip()]
     if len(parts) == 1 and re.fullmatch(r"[\u3400-\u9fff（）()·\s]+", value) and re.search(r"\s", value):
         parts = [v for v in re.split(r"\s+", value) if v]
+    if any(re.fullmatch(r"[\u3400-\u9fff]", part) for part in parts):
+        # Typesetting sometimes spaces out two-character names (杨　柳).
+        # Preserve the original author line when boundaries are ambiguous.
+        return [" ".join(value.split())]
     return parts
 
 

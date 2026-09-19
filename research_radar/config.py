@@ -13,6 +13,48 @@ PROVIDERS = {"nber", "cepr", "repec", "ssrn", "journal"}
 CHINESE_ADAPTERS = {"html", "ajcass_api", "pku_issue"}
 
 
+def summary_options(raw: dict) -> dict:
+    options = {"mode": "extractive", "max_model_calls": 20, "max_attempts": 3,
+               "max_input_chars": 30000, "max_output_tokens": 4000, "timeout_seconds": 45,
+               "api_key_env": "RESEARCH_RADAR_API_KEY"}
+    supplied = raw.get("summarization", {})
+    if not isinstance(supplied, dict):
+        raise ValueError("summarization must be a mapping")
+    options.update(supplied)
+    if options["mode"] not in {"extractive", "model"}:
+        raise ValueError("summarization.mode must be extractive or model")
+    for name, low, high in [("max_model_calls", 0, 1000), ("max_attempts", 1, 10),
+                            ("max_input_chars", 2000, 200000), ("max_output_tokens", 500, 16000),
+                            ("timeout_seconds", 1, 120)]:
+        value = options[name]
+        if type(value) is not int or not low <= value <= high:
+            raise ValueError(f"summarization.{name} must be an integer in [{low}, {high}]")
+    if options["mode"] == "model":
+        if not isinstance(options.get("endpoint"), str):
+            raise ValueError("summarization.endpoint must be a URL string")
+        endpoint = urlsplit(options["endpoint"])
+        local = endpoint.hostname in {"localhost", "127.0.0.1", "::1"}
+        if not endpoint.hostname or endpoint.username or endpoint.password or endpoint.query or endpoint.fragment:
+            raise ValueError("Model endpoint must be a URL without credentials, query or fragment")
+        if endpoint.scheme != "https" and not (local and endpoint.scheme == "http"):
+            raise ValueError("Model endpoint requires HTTPS (HTTP is allowed for loopback servers)")
+        if not isinstance(options.get("model"), str) or not options["model"].strip():
+            raise ValueError("summarization.model is required in model mode")
+        if not isinstance(options.get("api_key_env"), str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", options["api_key_env"]):
+            raise ValueError("summarization.api_key_env must name an environment variable")
+    return options
+
+
+def validate_email(raw: dict) -> None:
+    email = raw.get("email", {})
+    if not isinstance(email, dict):
+        raise ValueError("email must be a mapping")
+    for name in ("subject_prefix", "from", "to", "greeting", "signature"):
+        value = email.get(name, "")
+        if not isinstance(value, str) or any(ord(c) < 32 for c in value):
+            raise ValueError(f"email.{name} must be a single-line string")
+
+
 def official_host(url: str, allow_http: bool = False) -> str:
     parts = urlsplit(url)
     schemes = {"https", "http"} if allow_http else {"https"}
@@ -106,4 +148,6 @@ def load_config(path: str | Path) -> dict:
             raise ValueError(f"Duplicate international source id: {source_id}")
         source_ids.add(source_id)
         official_host(source["feed_url"])
+    summary_options(raw)
+    validate_email(raw)
     return raw

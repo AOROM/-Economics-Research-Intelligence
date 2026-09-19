@@ -60,7 +60,7 @@ def analyze(observation: dict, topic: dict) -> dict:
     methods = {name: hits for name, hits in methods.items() if hits}
     if "Staggered DID" in methods or "Triple Difference" in methods:
         methods.pop("DID", None)
-    datasets = [name for name in DATASETS if re.search(r"(?<!\w)" + re.escape(name) + r"(?!\w)", body, re.I)]
+    datasets = [name for name in DATASETS if re.search(r"(?<![A-Za-z0-9_])" + re.escape(name) + r"(?![A-Za-z0-9_])", body, re.I)]
     china_context = {group: [term for term in terms if term in body] for group, terms in china.items()}
     china_context = {group: terms for group, terms in china_context.items() if terms}
     policy_shock = {

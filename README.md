@@ -10,10 +10,11 @@
 | 英文工作论文和期刊 | RSS/Atom 订阅源适配器；CEPR 官网公布的 Discussion Papers RSS 提供可用预设。NBER、RePEc/NEP、SSRN 和英文期刊需要用户提供已核实的源地址。 |
 | ResearchWork 与版本 | DOI、来源稳定 ID、官方 URL 优先；标题和作者高相似度时合并，不确定的谱系留待人工核对。 |
 | 首次观察 | 首次成功扫描建立基线；后续扫描把新增工作与出版状态或版本变化分开。所有已发现记录进入状态库，包括低相关记录。 |
-| 经济学分析 | 双语概念词表、方法与数据名识别、多维相关度；研究设计字段只提取标题或摘要中有依据的内容。 |
-| 交付 | A–F 分层 Markdown 周报、每个来源的覆盖状态、长期 `research_map.json`。 |
+| 经济学分析 | 双语概念词表、方法与数据名识别、多维相关度；提炼研究问题、数据、方法、发现、机制与适用条件，并保存原文证据。 |
+| 论文总结 | 默认本地原文摘录；可配置模型生成中文归纳。支持导入与已有论文版本绑定的正文；模型结果须通过引文与数字检查，失败可重试。 |
+| 邮件交付 | 默认生成 `.eml` 邮件草稿，同时保存 HTML 预览、纯文本邮件、A–F Markdown 周报和长期研究地图。 |
 
-中文采集同时支持静态 HTML、AJCASS 官方公开接口和北京大学“期次页面到论文 PDF”的两级结构。扫描失败、证书失效或栏目没有匹配到论文链接时，会显示为覆盖不完整，不会变成“无新文”。`blocked` 期刊会在周报中说明官网阻塞及证据边界。RSS 快照只能代表该订阅源提供的条目，不能证明整个平台已被穷尽。研究设计抽取基于标题和摘要，不能替代全文核读；缺失字段保留为空。
+中文采集同时支持静态 HTML、AJCASS 官方公开接口和北京大学“期次页面到论文 PDF”的两级结构。扫描失败、证书失效或栏目没有匹配到论文链接时，会显示为覆盖不完整，不会变成“无新文”。`blocked` 期刊会在邮件中说明官网阻塞及证据边界。RSS 快照只能代表该订阅源提供的条目，不能证明整个平台已被穷尽。论文总结明确标注标题、摘要或用户提供正文的材料范围；缺失字段保持待核实。
 
 ## 快速开始
 
@@ -23,9 +24,23 @@ python -m unittest discover -s tests -v
 research-radar --config presets/corporate-finance-firm-boundaries.yaml --workdir .literature-monitor/corporate-finance-firm-boundaries
 ```
 
-首次运行会建立基线。第二次及以后运行才报告新工作与版本变化。周报保存到 `workdir/digests/`，状态和研究地图保存在 `workdir/`。`workdir` 默认不应提交到公开仓库。
+首次运行建立基线，并在邮件中展示“首次收录的文献”。后续运行把新工作、出版变化和提炼更新分开。命令默认打印 `workdir/emails/` 下的 `.eml` 邮件草稿路径；同目录保存 HTML 预览和纯文本版本。原有周报位于 `workdir/digests/`，状态和研究地图位于 `workdir/`。`workdir` 不应提交到公开仓库。
 
-返回码：`0` 全部配置来源扫描成功；`2` 部分来源失败；`1` 全部来源失败；`3` 配置或状态错误。失败来源的上次成功扫描时间会保留，周报会点名覆盖缺口。
+返回码：`0` 本次扫描与提炼完成；`2` 部分来源失败；`1` 全部来源失败；`3` 配置、状态或文件错误；`4` 模型提炼仍有待完成任务。扫描错误优先于 `4`。失败来源的上次成功扫描时间会保留，邮件会点名覆盖缺口。
+
+## 论文总结与邮件
+
+默认无需模型密钥即可生成有原文依据的摘录邮件。英文材料在摘录模式中保留英文原句；配置 `summarization.mode: model` 可生成中文归纳。邮件包含主题、重点论文、其他期刊更新、首次收录、补充提炼、研究关联与原文链接。
+
+已有检索结果可以直接补做总结并预览邮件：
+
+```bash
+research-radar --config presets/corporate-finance-firm-boundaries.yaml --workdir .literature-monitor/corporate-finance-firm-boundaries --summaries-only --format html
+```
+
+模型配置、全文导入、证据规范、缓存和重试见[论文提炼与邮件使用说明](references/paper-summaries.md)。邮件草稿由支持 `.eml` 的客户端打开，HTML 可在浏览器查看；项目不包含自动发信设置。
+
+仓库附有明确标注为合成样例的[邮件网页示例](examples/email-demo.html)、[纯文本示例](examples/email-demo.txt)和[邮件草稿](examples/email-demo.eml)。
 
 定时运行由宿主产品的 recurring automation、任务计划程序或 cron 执行本命令。安装此项目本身不会启动后台监控。
 
@@ -50,7 +65,7 @@ research-radar --config presets/corporate-finance-firm-boundaries.yaml --workdir
 
 ## 目录
 
-- `research_radar/`：采集、分析、ResearchWork 状态与周报。
+- `research_radar/`：采集、材料读取、论文提炼、ResearchWork 状态与邮件。
 - `research_radar/data/`：双语经济概念和中国经济语境词表。
 - `presets/`：可编辑的研究方向配置。
 - `references/`：来源、识别策略、论文生命周期与报告规范。

@@ -6,6 +6,18 @@ topic:
   preferred_methods: [Staggered DID, IV]
   preferred_datasets: [CSMAR, CNRDS, Compustat]
 
+# 默认离线提炼；如需模型中文归纳，见 references/paper-summaries.md。
+summarization:
+  mode: extractive
+  max_model_calls: 20
+  max_attempts: 3
+  max_input_chars: 30000
+
+email:
+  subject_prefix: 经济学文献简报
+  greeting: 你好，
+  signature: 经济学研究雷达
+
 # 用户指定的中文期刊白名单。所有可核实官网都已配置；blocked 表示官网本身当前不可用。
 chinese_monitor:
   official_site_only: true

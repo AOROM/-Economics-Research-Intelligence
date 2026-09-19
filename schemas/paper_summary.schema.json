@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Evidence-linked paper reading card",
+  "type": "object",
+  "required": ["schema_version", "summary_id", "cache_key", "content_hash", "version_fingerprint", "scope", "method", "paper_type", "claims", "created_at", "validation"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "summary_id": {"type": "string"},
+    "cache_key": {"type": "string"},
+    "content_hash": {"type": "string"},
+    "version_fingerprint": {"type": "string"},
+    "scope": {"enum": ["title-only", "title-and-abstract", "abstract-excerpt", "provided-full-text", "provided-full-text-partial"]},
+    "method": {"enum": ["extractive", "model"]},
+    "paper_type": {"enum": ["empirical", "theoretical", "review", "methodological", "unknown"]},
+    "model": {"type": ["string", "null"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "validation": {"enum": ["verbatim-extraction", "exact-passages-and-numbers"]},
+    "notes": {"type": "array", "items": {"type": "string"}},
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["field", "text", "attribution", "evidence"],
+        "properties": {
+          "field": {"enum": ["overview", "research_question", "theory", "data_sample", "variables", "identification", "identification_assumptions", "treatment_control", "findings", "mechanism", "heterogeneity", "contribution", "limitations"]},
+          "text": {"type": "string", "minLength": 1},
+          "attribution": {"const": "paper"},
+          "evidence": {
+            "type": "array", "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["block_id", "quote", "location", "url"],
+              "properties": {
+                "block_id": {"type": "string"},
+                "quote": {"type": "string", "minLength": 1},
+                "location": {"type": "string"},
+                "url": {"type": "string", "format": "uri"}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

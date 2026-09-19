@@ -15,7 +15,20 @@
     "journal_publication_at": {"type": ["string", "null"]},
     "versions": {"type": "array", "items": {"$ref": "#/$defs/event"}},
     "possible_links": {"type": "array", "items": {"type": "string"}},
-    "analysis": {"type": "object"}
+    "analysis": {"type": "object"},
+    "summary": {"$ref": "paper_summary.schema.json"},
+    "reading_relevance": {"type": "object"},
+    "summary_job": {
+      "type": "object",
+      "required": ["cache_key", "status", "attempts"],
+      "properties": {
+        "cache_key": {"type": "string"},
+        "status": {"enum": ["pending", "ready", "retry", "needs_review", "awaiting_configuration"]},
+        "attempts": {"type": "integer", "minimum": 0},
+        "last_error": {"type": ["string", "null"]},
+        "updated_at": {"type": "string", "format": "date-time"}
+      }
+    }
   },
   "$defs": {
     "event": {

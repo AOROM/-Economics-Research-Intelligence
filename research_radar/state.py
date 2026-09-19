@@ -81,15 +81,27 @@ def _version_fingerprint(observation: dict) -> str:
     return stable_hash(
         str(observation.get("source_id")), str(observation.get("stable_id")),
         str(observation.get("status")), str(observation.get("version_date") or observation.get("published_online")),
-        str(observation.get("abstract") or ""), str(doi_key(observation.get("doi")) or ""),
+        str(doi_key(observation.get("doi")) or ""),
         str(url_key(observation.get("official_url")) or ""),
     )
 
 
+def _same_publication(event: dict, observation: dict) -> bool:
+    """Also recognize pre-0.3 fingerprints which included the abstract."""
+    return (
+        event.get("source_stable_key") == observation["source_id"] + ":" + str(observation.get("stable_id"))
+        and event.get("source_id") == observation["source_id"]
+        and event.get("status") == observation.get("status")
+        and (event.get("version_date") or event.get("published_online")) == (observation.get("version_date") or observation.get("published_online"))
+        and doi_key(event.get("doi")) == doi_key(observation.get("doi"))
+        and url_key(event.get("official_url")) == url_key(observation.get("official_url"))
+    )
+
+
 def apply_observations(state: dict, scans: list, topic: dict, observed_at: str) -> tuple[dict, dict]:
-    """Apply complete scans in memory. Caller writes the digest before persisting state."""
+    """Apply complete scans; abstract enrichment is separate from publication events."""
     updated = copy.deepcopy(state)
-    changes = {"new": [], "updated": [], "baseline": [], "possible_links": []}
+    changes = {"new": [], "updated": [], "baseline": [], "enriched": [], "possible_links": []}
     for scan in scans:
         prior = updated["source_scans"].get(scan.source_id)
         baseline = not prior or not prior.get("last_successful_scan_at")
@@ -114,7 +126,28 @@ def apply_observations(state: dict, scans: list, topic: dict, observed_at: str) 
                 kind = "baseline" if baseline else "updated"
             work = updated["works"][work_id]
             fingerprint = _version_fingerprint(obs)
-            if any(event["fingerprint"] == fingerprint for event in work["versions"]):
+            existing = next((event for event in reversed(work["versions"])
+                             if event["fingerprint"] == fingerprint or _same_publication(event, obs)), None)
+            if existing:
+                # A temporarily missing abstract does not erase material already
+                # acquired from the same publication version.
+                enriched = False
+                if obs.get("abstract") and obs["abstract"] != existing.get("abstract"):
+                    existing["abstract"] = obs["abstract"]
+                    enriched = True
+                for field in ("title", "authors"):
+                    if obs.get(field):
+                        enriched = enriched or (field in existing and existing[field] != obs[field])
+                        existing[field] = obs[field]
+                if enriched:
+                    existing["content_updated_at"] = observed_at
+                    changes["enriched"].append({"work_id": work_id, "work": work, "event": existing, "change_type": "enriched"})
+                current = work["versions"][-1]
+                if existing is current:
+                    work["title"] = current.get("title") or work["title"]
+                    if current.get("authors"):
+                        work["authors"] = current["authors"]
+                work["analysis"] = analyze({**current, "title": current.get("title") or work["title"]}, topic)
                 continue
             event = {
                 "fingerprint": fingerprint, "source_id": obs["source_id"],
@@ -123,6 +156,7 @@ def apply_observations(state: dict, scans: list, topic: dict, observed_at: str) 
                 "official_url": obs["official_url"], "visibility_source_url": obs["visibility_source_url"],
                 "first_seen_at": observed_at, "published_online": obs.get("published_online"),
                 "version_date": obs.get("version_date"), "abstract": obs.get("abstract"),
+                "title": obs["title"], "authors": obs.get("authors") or work["authors"],
                 "priority": obs.get("priority", "normal"), "baseline": baseline,
             }
             work["versions"].append(event)
@@ -132,11 +166,11 @@ def apply_observations(state: dict, scans: list, topic: dict, observed_at: str) 
                 current = work.get("current_version_at")
                 work["first_public_version_at"] = min(first, official_day) if first else official_day
                 work["current_version_at"] = max(current, official_day) if current else official_day
-                if obs["kind"] in {"chinese_journal", "english_journal"} and obs.get("status", "").lower() in {"正式出版", "正式发表", "published"}:
+                if obs["kind"] in {"chinese_journal", "english_journal"} and (obs.get("status") or "").lower() in {"正式出版", "正式发表", "published"}:
                     work["journal_publication_at"] = official_day
             if not work.get("authors") and obs.get("authors"):
                 work["authors"] = obs["authors"]
-            if obs.get("status", "").lower() in {"正式出版", "正式发表", "published"}:
+            if (obs.get("status") or "").lower() in {"正式出版", "正式发表", "published"}:
                 work["title"] = obs["title"]
             work["analysis"] = analyze(obs, topic)
             changes[kind].append({"work_id": work_id, "work": work, "event": event, "change_type": kind})

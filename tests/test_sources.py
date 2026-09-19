@@ -3,7 +3,7 @@ import json
 import unittest
 
 from research_radar.normalize import url_key
-from research_radar.sources import ChineseOfficialSource, SourceError, parse_feed
+from research_radar.sources import ChineseOfficialSource, SourceError, parse_feed, split_authors
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -31,6 +31,10 @@ class FakeSession:
 
 
 class SourceTests(unittest.TestCase):
+    def test_spaced_chinese_name_is_not_split_into_single_character_authors(self):
+        authors = split_authors("李珍珍　杨　柳　杨甜甜　李　明")
+        self.assertEqual(authors, ["李珍珍 杨 柳 杨甜甜 李 明"])
+
     def journal(self):
         return {"name": "测试经济学期刊", "homepage": "https://journal.example", "priority": "critical", "surfaces": [{
             "label": "网络首发", "url": "https://journal.example/online", "item_selector": ".paper",

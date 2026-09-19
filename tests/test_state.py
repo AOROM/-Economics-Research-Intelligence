@@ -39,6 +39,30 @@ class StateTests(unittest.TestCase):
         self.assertEqual(len(changes["updated"]), 1)
         self.assertEqual(len(next(iter(state["works"].values()))["versions"]), 2)
 
+    def test_abstract_enrichment_is_not_a_publication_version(self):
+        first = observation()
+        first["abstract"] = None
+        state, _ = apply_observations(empty_state("m"), [scan(first)], self.topic, self.t1)
+        state, changes = apply_observations(state, [scan(observation())], self.topic, self.t2)
+        self.assertFalse(changes["new"])
+        self.assertFalse(changes["updated"])
+        self.assertEqual(len(changes["enriched"]), 1)
+        work = next(iter(state["works"].values()))
+        self.assertEqual(len(work["versions"]), 1)
+        self.assertTrue(work["versions"][0]["abstract"])
+        state, changes = apply_observations(state, [scan(first)], self.topic, self.t2)
+        self.assertTrue(next(iter(state["works"].values()))["versions"][0]["abstract"])
+        self.assertFalse(changes["enriched"])
+
+    def test_legacy_fingerprint_is_preserved_without_duplicate_version(self):
+        state, _ = apply_observations(empty_state("m"), [scan(observation())], self.topic, self.t1)
+        next(iter(state["works"].values()))["versions"][0]["fingerprint"] = "legacy-abstract-inclusive-hash"
+        state, changes = apply_observations(state, [scan(observation())], self.topic, self.t2)
+        self.assertFalse(changes["updated"])
+        versions = next(iter(state["works"].values()))["versions"]
+        self.assertEqual(len(versions), 1)
+        self.assertEqual(versions[0]["fingerprint"], "legacy-abstract-inclusive-hash")
+
     def test_failed_source_state_is_preserved(self):
         state, _ = apply_observations(empty_state("m"), [scan(observation())], self.topic, self.t1)
         next_state, _ = apply_observations(state, [], self.topic, self.t2)
