@@ -39,6 +39,7 @@
         "source_id": {"type": "string"},
         "source_name": {"type": "string"},
         "kind": {"enum": ["chinese_journal", "english_journal", "working_paper"]},
+        "tier": {"type": ["string", "null"]},
         "status": {"type": ["string", "null"]},
         "doi": {"type": ["string", "null"]},
         "official_url": {"type": "string", "format": "uri"},

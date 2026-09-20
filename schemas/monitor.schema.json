@@ -54,6 +54,7 @@
     "international_monitor": {
       "type": "object",
       "properties": {
+        "catalogs": {"type": "array", "items": {"enum": ["zufe-economics-finance-2020"]}},
         "sources": {"type": "array", "items": {"$ref": "#/$defs/international_source"}}
       }
     }
@@ -118,13 +119,19 @@
     },
     "international_source": {
       "type": "object",
-      "required": ["provider", "name", "feed_url"],
+      "required": ["provider", "name"],
       "properties": {
-        "provider": {"enum": ["nber", "cepr", "repec", "ssrn", "journal"]},
+        "provider": {"enum": ["nber", "cepr", "repec", "ssrn", "journal", "crossref"]},
         "name": {"type": "string"},
         "feed_url": {"type": "string", "format": "uri"},
+        "api_url": {"type": "string", "format": "uri"},
+        "issn": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{3}[0-9X]$"},
+        "tier": {"enum": ["TOP", "一级A"]},
         "priority": {"enum": ["normal", "critical"]}
-      }
+      },
+      "allOf": [
+        {"if": {"properties": {"provider": {"const": "crossref"}}, "required": ["provider"]}, "then": {"required": ["api_url", "issn", "tier"]}, "else": {"required": ["feed_url"]}}
+      ]
     }
   }
 }

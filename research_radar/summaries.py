@@ -215,7 +215,8 @@ def reading_relevance(work: dict, topic: dict) -> dict:
             "basis": "title-and-abstract signals; suggestions are reading tasks, not paper findings"}
 
 
-def refresh_summaries(state: dict, config: dict, workdir: Path, now: str, *, retry: bool = False) -> dict:
+def refresh_summaries(state: dict, config: dict, workdir: Path, now: str, *, retry: bool = False,
+                      work_ids: set[str] | None = None) -> dict:
     options = summary_options(config)
     result = {"changed": [], "model_calls": 0, "pending": 0, "failed": 0, "awaiting_configuration": 0}
 
@@ -227,7 +228,8 @@ def refresh_summaries(state: dict, config: dict, workdir: Path, now: str, *, ret
         if event not in pending:
             pending.append(event)
 
-    works = list(state["works"].values())
+    works = [work for work_id, work in state["works"].items()
+             if work_ids is None or work_id in work_ids]
     # Compute relevance every time, even for unchanged publication versions.
     old_topics = {w["canonical_work_id"]: w.get("reading_relevance", {}).get("topic_hash") for w in works}
     for work in works:

@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from research_radar.cli import run
+from research_radar.config import load_config
 from research_radar.mail import render_mail, write_mail
 from research_radar.sources import ScanResult
 from research_radar.state import apply_observations, empty_state, save_json_atomic
@@ -21,6 +22,16 @@ def mail_config():
 
 
 class MailTests(unittest.TestCase):
+    def test_report_begins_with_every_configured_journal_group(self):
+        preset = Path(__file__).parent.parent / "presets" / "corporate-finance-firm-boundaries.yaml"
+        config = load_config(preset)
+        changes = {key: [] for key in ("new", "updated", "baseline", "enriched", "summary_updated", "possible_links")}
+        report = render_mail(config, {"works": {}, "source_scans": {}}, changes, [], [], NOW, {})
+        self.assertIn("本次检索期刊名单（112 本", report.text)
+        self.assertIn("American Economic Review", report.text)
+        self.assertIn("Journal of Financial Stability", report.text)
+        self.assertLess(report.text.index("American Economic Review"), report.text.index("来源覆盖"))
+
     def test_utf8_subject_plain_and_html_mime_parts_roundtrip(self):
         state, _, changes = prepared()
         with tempfile.TemporaryDirectory() as temp:
@@ -34,13 +45,16 @@ class MailTests(unittest.TestCase):
             self.assertIsNone(message["To"])
             self.assertEqual(message["X-Unsent"], "1")
             self.assertEqual(message.get_body(preferencelist=("plain",)).get_content().replace("\r\n", "\n").strip(), report.text.strip())
-            self.assertIn("企业纵向一体化与融资约束", message.get_body(preferencelist=("html",)).get_content())
-            self.assertIn("首次基线收录 1 篇", report.text)
+            self.assertIn("测试期刊", message.get_body(preferencelist=("html",)).get_content())
+            self.assertIn("建立比较基线 1 条", report.text)
+            self.assertNotIn("首次收录的文献", report.text)
             self.assertIn("新增 0 篇", report.subject)
             self.assertEqual({p.suffix for p in outputs.values()}, {".txt", ".html", ".eml"})
 
     def test_html_escapes_source_content_and_rejects_unsafe_links(self):
         state, work, changes = prepared()
+        changes["new"] = changes.pop("baseline")
+        changes["new"][0]["change_type"] = "new"
         work["versions"][-1]["title"] = '<script>alert("bad")</script>论文标题'
         work["versions"][-1]["official_url"] = 'javascript:alert("bad")'
         report = render_mail(mail_config(), state, changes, [], [], NOW, {})
@@ -63,18 +77,47 @@ class MailTests(unittest.TestCase):
 
     def test_same_paper_appears_once_when_summary_and_publication_both_change(self):
         state, work, changes = prepared()
+        changes["new"] = changes.pop("baseline")
+        changes["new"][0]["change_type"] = "new"
         changes["summary_updated"] = [{"work_id": work["canonical_work_id"], "work": work, "event": work["versions"][-1], "change_type": "summary_updated"}]
         report = render_mail(mail_config(), state, changes, [], [], NOW, {})
         self.assertEqual(report.text.count("\n" + work["title"] + "\n"), 1)
 
     def test_previous_versions_summary_is_not_used_for_current_version(self):
         state, work, changes = prepared()
+        changes["new"] = changes.pop("baseline")
+        changes["new"][0]["change_type"] = "new"
         work["summary"] = {"version_fingerprint": "old", "claims": [{"text": "旧版本的主要结果"}]}
         report = render_mail(mail_config(), state, changes, [], [], NOW, {})
         self.assertNotIn("旧版本的主要结果", report.text)
 
 
 class MailIntegrationTests(unittest.TestCase):
+    def test_baseline_and_unchanged_papers_are_skipped_then_only_new_paper_is_reported(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = root / "config.yaml"
+            config.write_text(CONFIG, encoding="utf-8")
+            workdir = root / "monitor"
+            old = observation(title="基线中的旧论文", doi="10.1234/old", url="https://journal.example/old")
+            new = observation(title="本次新增论文", doi="10.1234/new", url="https://journal.example/new")
+            empty_feed = ScanResult("cepr:CEPR", "CEPR", "working_paper", [], 1, "feed-snapshot")
+            with patch("research_radar.cli.ChineseOfficialSource.scan", side_effect=[scan(old), scan(old), scan(old, new)]), \
+                    patch("research_radar.cli.InternationalFeedSource.scan", side_effect=[empty_feed, empty_feed, empty_feed]):
+                _, first = run(config, workdir)
+                _, second = run(config, workdir)
+                _, third = run(config, workdir)
+            first_text = (workdir / "emails" / (first.stem + ".txt")).read_text(encoding="utf-8")
+            second_text = (workdir / "emails" / (second.stem + ".txt")).read_text(encoding="utf-8")
+            third_text = (workdir / "emails" / (third.stem + ".txt")).read_text(encoding="utf-8")
+            self.assertNotIn("基线中的旧论文", first_text)
+            self.assertNotIn("基线中的旧论文", second_text)
+            self.assertNotIn("基线中的旧论文", third_text)
+            self.assertIn("本次新增论文", third_text)
+            state = json.loads((workdir / "state.json").read_text(encoding="utf-8"))
+            old_work = next(work for work in state["works"].values() if work["title"] == "基线中的旧论文")
+            self.assertNotIn("summary", old_work)
+
     def test_summaries_only_generates_mail_without_network_or_new_publications(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -125,17 +168,20 @@ class MailIntegrationTests(unittest.TestCase):
                 code, _ = run(config, workdir, defer_report_ack=True)
             self.assertEqual(code, 0)
             saved = json.loads((workdir / "state.json").read_text(encoding="utf-8"))
-            self.assertTrue(saved["pending_report"])
+            self.assertEqual(saved["pending_report"], [])
 
     def test_unconfigured_model_reports_partial_summary_without_losing_discoveries(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             config = root / "config.yaml"
             config.write_text(CONFIG + '\nsummarization:\n  mode: model\n  endpoint: https://model.example/v1/chat/completions\n  model: example\n  api_key_env: UNSET_TEST_EMAIL_SUMMARY_KEY\n', encoding="utf-8")
+            workdir = root / "monitor"
+            baseline, _ = apply_observations(empty_state("test"), [scan()], TOPIC, NOW)
+            save_json_atomic(workdir / "state.json", baseline)
             with patch("research_radar.cli.ChineseOfficialSource.scan", return_value=scan(observation())), patch("research_radar.cli.InternationalFeedSource.scan", return_value=ScanResult("cepr:CEPR", "CEPR", "working_paper", [], 1, "feed-snapshot")):
-                code, digest = run(config, root / "monitor")
+                code, digest = run(config, workdir)
             self.assertEqual(code, 4)
-            text = (root / "monitor" / "emails" / (digest.stem + ".txt")).read_text(encoding="utf-8")
+            text = (workdir / "emails" / (digest.stem + ".txt")).read_text(encoding="utf-8")
             self.assertIn("等待模型配置", text)
             self.assertIn("本文研究企业纵向一体化与融资约束", text)
 

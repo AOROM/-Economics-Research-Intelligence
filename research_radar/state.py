@@ -157,7 +157,7 @@ def apply_observations(state: dict, scans: list, topic: dict, observed_at: str) 
                 "first_seen_at": observed_at, "published_online": obs.get("published_online"),
                 "version_date": obs.get("version_date"), "abstract": obs.get("abstract"),
                 "title": obs["title"], "authors": obs.get("authors") or work["authors"],
-                "priority": obs.get("priority", "normal"), "baseline": baseline,
+                "priority": obs.get("priority", "normal"), "tier": obs.get("tier"), "baseline": baseline,
             }
             work["versions"].append(event)
             official_day = obs.get("published_online")

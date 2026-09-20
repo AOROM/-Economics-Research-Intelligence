@@ -9,11 +9,13 @@ from pathlib import Path
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
+import requests
+
 from .config import load_config
 from .digest import render_digest
 from .documents import import_fulltext
 from .mail import render_mail, write_mail
-from .sources import ChineseOfficialSource, InternationalFeedSource, SourceError
+from .sources import CrossrefJournalSource, ChineseOfficialSource, InternationalFeedSource, SourceError
 from .state import apply_observations, load_state, research_map, save_json_atomic
 from .summaries import refresh_summaries
 
@@ -34,7 +36,7 @@ def _restore_pending(state: dict, changes: dict) -> None:
 def _save_pending(state: dict, changes: dict) -> None:
     state["pending_report"] = [
         {"work_id": row["work_id"], "fingerprint": row["event"]["fingerprint"], "change_type": kind}
-        for kind, rows in changes.items() if kind != "possible_links" for row in rows
+        for kind, rows in changes.items() if kind in {"new", "updated", "summary_updated"} for row in rows
     ]
 
 
@@ -55,7 +57,13 @@ def run(config_path: Path, workdir: Path, *, summaries_only: bool = False, retry
         import_fulltext(fulltext, previous["works"][work_id], workdir, fulltext_source)
         summaries_only = True
     sources = [ChineseOfficialSource(j) for j in config["chinese_monitor"]["journals"] if j.get("status", "active") == "active"]
-    sources.extend(InternationalFeedSource(s) for s in config.get("international_monitor", {}).get("sources", []))
+    crossref_session = requests.Session()
+    for source in config.get("international_monitor", {}).get("sources", []):
+        if source["provider"] == "crossref":
+            prior_scan = previous.get("source_scans", {}).get(source["id"], {})
+            sources.append(CrossrefJournalSource(source, prior_scan.get("last_successful_scan_at"), crossref_session))
+        else:
+            sources.append(InternationalFeedSource(source))
     if not sources and not summaries_only:
         raise ValueError("Configure at least one Chinese journal or international source")
     scans, failures = [], []
@@ -70,7 +78,11 @@ def run(config_path: Path, workdir: Path, *, summaries_only: bool = False, retry
     # Keep discoveries/report events before any model call. Summaries can be
     # retried and a failed export must not swallow a new-paper notification.
     save_json_atomic(state_path, updated)
-    summary_result = refresh_summaries(updated, config, workdir, now, retry=retry_summaries)
+    report_work_ids = None if summaries_only else {
+        row["work_id"] for kind in ("new", "updated") for row in changes.get(kind, [])
+    }
+    summary_result = refresh_summaries(updated, config, workdir, now, retry=retry_summaries,
+                                       work_ids=report_work_ids)
     changed_ids = list(updated["works"]) if summaries_only else summary_result["changed"]
     changes["summary_updated"] = [
         {"work_id": wid, "work": updated["works"][wid], "event": updated["works"][wid]["versions"][-1], "change_type": "summary_updated"}

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections import Counter
 
+from .config import journal_target_groups
+
 
 DESIGN_LABELS = {
     "research_question": "研究问题", "economic_mechanism": "经济机制", "theoretical_framework": "理论框架",
@@ -49,14 +51,19 @@ def render_digest(config: dict, changes: dict, scans: list, failures: list[dict]
     new = changes["new"]
     updated = changes["updated"]
     active = new + updated
-    scans_by_id = {scan.source_id: scan for scan in scans}
     lines = ["# 本周经济学研究雷达", "", f"- 扫描时间：{observed_at}",
              f"- 研究方向：{config['topic']['statement']}",
-             f"- 新 ResearchWork：{len(new)}；版本或出版状态更新：{len(updated)}；首次基线收录：{len(changes['baseline'])}",
-             "", "## 覆盖情况", ""]
-    for scan in scans:
-        prior = previous.get("source_scans", {}).get(scan.source_id, {})
-        lines.append(f"- {scan.source_name}：已扫描 {scan.pages} 页、{len(scan.observations)} 条；范围为 {scan.coverage}；上次成功扫描：{prior.get('last_successful_scan_at') or '首次扫描'}。")
+             f"- 新增论文：{len(new)}；版本或出版状态更新：{len(updated)}；建立比较基线：{len(changes['baseline'])} 条（不作为本期新文）",
+             "", "## 本次检索期刊名单", ""]
+    target_groups = journal_target_groups(config)
+    for label, names in target_groups:
+        lines.append(f"- **{label}（{len(names)} 本）**：" + "；".join(names))
+    lines += ["", "## 覆盖情况", ""]
+    changed_sources = {row["event"]["source_id"] for kind in ("new", "updated") for row in changes.get(kind, [])}
+    journal_scans = [scan for scan in scans if scan.kind in {"chinese_journal", "english_journal"}]
+    skipped = sum(scan.source_id not in changed_sources for scan in journal_scans)
+    if scans:
+        lines.append(f"- 成功完成 {len(scans)} 个来源；其中 {skipped} 本期刊没有新增论文或出版版本变化，已从论文部分跳过。")
     for failure in failures:
         prior = previous.get("source_scans", {}).get(failure["source_id"], {})
         lines.append(f"- {failure['source_name']}：**覆盖不完整**；{failure['error']}；上次成功扫描：{prior.get('last_successful_scan_at') or '从未成功'}。")
@@ -73,14 +80,17 @@ def render_digest(config: dict, changes: dict, scans: list, failures: list[dict]
     lines += ["", "## B. 重点中文期刊官网更新", ""]
     critical_names = [j["name"] for j in config.get("chinese_monitor", {}).get("journals", []) if j.get("priority") == "critical"]
     if critical_names:
-        lines += ["| 期刊 | 新论文 | 高相关 | 状态变化 |", "| --- | ---: | ---: | ---: |"]
-        for name in critical_names:
-            if "zh:" + name not in scans_by_id:
-                lines.append(f"| {name} | 未核实 | 未核实 | 未核实 |")
-                continue
+        changed_names = [name for name in critical_names if any(
+            row["event"]["source_name"] == name for row in active
+        )]
+        if changed_names:
+            lines += ["| 期刊 | 新论文 | 高相关 | 状态变化 |", "| --- | ---: | ---: | ---: |"]
+        for name in changed_names:
             cnew = [c for c in new if c["event"]["source_name"] == name]
             cup = [c for c in updated if c["event"]["source_name"] == name]
             lines.append(f"| {name} | {len(cnew)} | {sum(_score(c) >= 2 for c in cnew)} | {len(cup)} |")
+        if not changed_names:
+            lines.append("本次没有新增或出版版本变化的中文期刊论文。")
         lower = [c for c in active if c["event"]["source_name"] in critical_names and _score(c) < 2]
         if lower:
             lines += ["", "### 其他新增与状态变化", ""]

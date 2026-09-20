@@ -34,11 +34,19 @@ international_monitor:
 class CliTests(unittest.TestCase):
     def test_user_journal_whitelist_has_explicit_official_coverage(self):
         preset = Path(__file__).parent.parent / "presets" / "corporate-finance-firm-boundaries.yaml"
-        journals = load_config(preset)["chinese_monitor"]["journals"]
+        loaded = load_config(preset)
+        journals = loaded["chinese_monitor"]["journals"]
         self.assertEqual(len(journals), 11)
         self.assertEqual(sum(j.get("status") == "active" for j in journals), 10)
         self.assertEqual(sum(j.get("status") == "pending" for j in journals), 0)
         self.assertEqual(sum(j.get("status") == "blocked" for j in journals), 1)
+        english = loaded["international_monitor"]["sources"]
+        self.assertEqual(len(english), 101)
+        self.assertEqual(sum(source["tier"] == "TOP" for source in english), 8)
+        self.assertEqual(sum(source["tier"] == "一级A" for source in english), 93)
+        self.assertEqual(len({source["issn"] for source in english}), 101)
+        self.assertEqual(english[0]["name"], "American Economic Review")
+        self.assertEqual(english[-1]["name"], "Journal of Financial Stability")
 
     def test_pending_journal_is_reported_without_scanning(self):
         with tempfile.TemporaryDirectory() as temp:

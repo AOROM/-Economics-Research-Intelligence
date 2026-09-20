@@ -155,13 +155,12 @@ chinese_monitor:
           abstract_selector: .abs
           article_metadata: true
 
-# CEPR 的 Discussion Papers RSS 在其官网列明。其它来源请先核实官方订阅地址再添加。
+# 校级目录中的经济与金融外文 TOP 期刊 8 本、一级 A 期刊 93 本。
+# 目录条目按 ISSN 展开为 Crossref 期刊检索源；Crossref 提供 DOI 元数据，论文链接回到 DOI/出版社页面。
 international_monitor:
-  sources:
-    - provider: cepr
-      name: CEPR Discussion Papers
-      feed_url: https://cepr.org/rss/discussion-paper
-      priority: normal
+  catalogs:
+    - zufe-economics-finance-2020
+  sources: []
 
 # 添加其它中文期刊的配置示意（请依据实际官网 HTML 填写，不要照抄选择器）：
 #   - name: 某经济学期刊

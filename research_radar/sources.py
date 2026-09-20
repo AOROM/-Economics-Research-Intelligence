@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlencode, urljoin, urlsplit, urlunsplit
 
@@ -32,7 +33,7 @@ class ScanResult:
     coverage: str
 
 
-USER_AGENT = "Mozilla/5.0 (compatible; EconomicsResearchRadar/0.2; official-journal-monitor)"
+USER_AGENT = "EconomicsResearchRadar/0.5 (+https://github.com/AOROM/-Economics-Research-Intelligence)"
 
 
 def request_official(
@@ -57,6 +58,15 @@ def request_official(
             response = caller(url, **kwargs)
             if not within_hosts(response.url, hosts, allow_http=allow_http):
                 raise SourceError(f"Redirect outside configured official hosts: {response.url}")
+            if getattr(response, "status_code", 200) in {429, 503} and attempt < 2:
+                retry_after = getattr(response, "headers", {}).get("Retry-After", "")
+                try:
+                    delay = min(max(float(retry_after), 1.0), 30.0)
+                except (TypeError, ValueError):
+                    delay = float(2**attempt)
+                last_error = SourceError(f"HTTP {response.status_code}; retrying after {delay:g} seconds")
+                time.sleep(delay)
+                continue
             response.raise_for_status()
             if len(response.content) > 5_000_000:
                 raise SourceError("Response exceeds 5 MB limit")
@@ -504,3 +514,132 @@ class InternationalFeedSource:
         items = parse_feed(xml, self.source, observed_at)
         kind = "english_journal" if self.source["provider"] == "journal" else "working_paper"
         return ScanResult(self.source_id, self.source["name"], kind, items, 1, "feed-snapshot")
+
+
+def _crossref_date(item: dict) -> str | None:
+    for field in ("published-online", "published-print", "issued"):
+        parts = (item.get(field) or {}).get("date-parts") or []
+        if not parts or not isinstance(parts[0], list) or len(parts[0]) < 3:
+            continue
+        try:
+            return date(*(int(value) for value in parts[0][:3])).isoformat()
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _crossref_authors(item: dict) -> list[str]:
+    result = []
+    for author in item.get("author") or []:
+        if not isinstance(author, dict):
+            continue
+        name = " ".join(str(author.get(field) or "").strip() for field in ("given", "family")).strip()
+        if not name:
+            name = str(author.get("name") or "").strip()
+        if name:
+            result.append(name)
+    return result
+
+
+class CrossrefJournalSource:
+    """Query Crossref by ISSN and use the durable state to identify unseen works."""
+
+    HOSTS = ["api.crossref.org"]
+    ROWS = 1000
+    OVERLAP_DAYS = 14
+    RECENT_PUBLICATION_DAYS = 180
+
+    def __init__(self, source: dict, last_successful_scan_at: str | None = None,
+                 session: requests.Session | None = None):
+        self.source = dict(source)
+        self.source_id = self.source.get("id") or "crossref:" + self.source["issn"]
+        self.last_successful_scan_at = last_successful_scan_at
+        self.session = session or requests.Session()
+        api_url = self.source.get("api_url", "https://api.crossref.org").rstrip("/")
+        if official_host(api_url) != "api.crossref.org":
+            raise ValueError("Crossref source must use api.crossref.org")
+        self.api_url = api_url
+
+    @staticmethod
+    def _moment(value: str) -> datetime:
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except (TypeError, ValueError) as exc:
+            raise SourceError(f"Invalid scan timestamp for Crossref: {value}") from exc
+
+    def scan(self, observed_at: str) -> ScanResult:
+        current = self._moment(observed_at)
+        prior = self._moment(self.last_successful_scan_at) if self.last_successful_scan_at else current
+        start = (prior - timedelta(days=self.OVERLAP_DAYS)).date().isoformat()
+        end = current.date().isoformat()
+        publication_start = (current - timedelta(days=self.RECENT_PUBLICATION_DAYS)).date().isoformat()
+        filters = (
+            f"type:journal-article,from-index-date:{start},until-index-date:{end},"
+            f"from-pub-date:{publication_start},until-pub-date:{end}"
+        )
+        params = {
+            "filter": filters,
+            "rows": str(self.ROWS),
+            "select": "DOI,title,author,published-online,published-print,issued,URL,abstract,container-title",
+            "sort": "indexed",
+            "order": "asc",
+        }
+        mailto = os.environ.get("CROSSREF_MAILTO", "").strip()
+        if re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", mailto):
+            params["mailto"] = mailto
+        url = f"{self.api_url}/journals/{self.source['issn']}/works?{urlencode(params)}"
+        response = request_official(url, self.HOSTS, self.session)
+        try:
+            payload = response.json() if hasattr(response, "json") else json.loads(response.text)
+            message = payload["message"]
+            items = message["items"]
+            total = int(message["total-results"])
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise SourceError(f"Crossref returned invalid work metadata for {self.source['name']}") from exc
+        if not isinstance(items, list):
+            raise SourceError(f"Crossref returned an invalid item list for {self.source['name']}")
+        if total > self.ROWS:
+            raise SourceError(
+                f"Crossref window contains {total} records, above the safe one-page limit of {self.ROWS}"
+            )
+        observations = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            titles = item.get("title") or []
+            title = (BeautifulSoup(titles[0], "html.parser").get_text(" ", strip=True)
+                     if isinstance(titles, list) and titles and isinstance(titles[0], str) else "")
+            doi = extract_doi(item.get("DOI"))
+            publisher_url = "https://doi.org/" + doi if doi else str(item.get("URL") or "")
+            stable_id = doi or url_key(publisher_url)
+            if not title or not stable_id or not url_key(publisher_url):
+                continue
+            abstract = item.get("abstract")
+            if abstract:
+                abstract = BeautifulSoup(str(abstract), "html.parser").get_text(" ", strip=True)
+            observations.append({
+                "source_id": self.source_id,
+                "source_name": self.source["name"],
+                "kind": "english_journal",
+                "language": "en",
+                "journal": self.source["name"],
+                "tier": self.source.get("tier"),
+                "priority": self.source.get("priority", "critical"),
+                "title": " ".join(title.split()),
+                "authors": _crossref_authors(item),
+                "doi": doi,
+                "stable_id": stable_id,
+                "official_url": publisher_url,
+                "visibility_source_url": url,
+                "status": "Published",
+                "published_online": _crossref_date(item),
+                "version_date": None,
+                "abstract": " ".join(abstract.split()) if abstract else None,
+                "observed_at": observed_at,
+            })
+        phase = "baseline" if not self.last_successful_scan_at else "incremental"
+        coverage = (
+            f"crossref-{phase}; indexed {start} through {end}; publication date {publication_start} through {end}; "
+            f"{self.OVERLAP_DAYS}-day index overlap"
+        )
+        return ScanResult(self.source_id, self.source["name"], "english_journal", observations, 1, coverage)

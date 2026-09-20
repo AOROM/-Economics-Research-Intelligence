@@ -1,9 +1,12 @@
 from pathlib import Path
 import json
 import unittest
+from urllib.parse import parse_qs, urlsplit
+from unittest.mock import patch
 
 from research_radar.normalize import url_key
-from research_radar.sources import ChineseOfficialSource, SourceError, parse_feed, split_authors
+from research_radar.sources import (CrossrefJournalSource, ChineseOfficialSource, SourceError,
+                                    parse_feed, request_official, split_authors)
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -14,9 +17,14 @@ class FakeResponse:
         self.url = url
         self.content = content.encode("utf-8")
         self.text = content
+        self.status_code = 200
+        self.headers = {}
 
     def raise_for_status(self):
         return None
+
+    def json(self):
+        return json.loads(self.text)
 
 
 class FakeSession:
@@ -31,6 +39,23 @@ class FakeSession:
 
 
 class SourceTests(unittest.TestCase):
+    def test_retry_after_is_honored_for_rate_limit(self):
+        limited = FakeResponse("https://api.crossref.org/works", "{}")
+        limited.status_code = 429
+        limited.headers = {"Retry-After": "2"}
+        ready = FakeResponse("https://api.crossref.org/works", "{}")
+
+        class RetrySession:
+            def __init__(inner):
+                inner.responses = [limited, ready]
+            def get(inner, url, **kwargs):
+                return inner.responses.pop(0)
+
+        with patch("research_radar.sources.time.sleep") as sleep:
+            response = request_official("https://api.crossref.org/works", ["api.crossref.org"], RetrySession())
+        self.assertIs(response, ready)
+        sleep.assert_called_once_with(2.0)
+
     def test_spaced_chinese_name_is_not_split_into_single_character_authors(self):
         authors = split_authors("李珍珍　杨　柳　杨甜甜　李　明")
         self.assertEqual(authors, ["李珍珍 杨 柳 杨甜甜 李 明"])
@@ -161,6 +186,49 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["stable_id"], "dp12345")
         self.assertEqual(items[0]["kind"], "working_paper")
+
+    def test_crossref_journal_uses_bounded_index_window_and_publisher_link(self):
+        payload = {"message": {"total-results": 1, "items": [{
+            "DOI": "10.1234/TEST.1", "title": ["Firm Boundaries and Credit"],
+            "author": [{"given": "Alice", "family": "Smith"}],
+            "published-online": {"date-parts": [[2026, 9, 17]]},
+            "URL": "https://api.crossref.org/works/10.1234/test.1",
+            "abstract": "<jats:p>We study firm boundaries.</jats:p>",
+        }]}}
+
+        class CrossrefSession:
+            def get(inner, url, **kwargs):
+                inner.url = url
+                return FakeResponse(url, json.dumps(payload))
+
+        session = CrossrefSession()
+        source = {"id": "crossref:0022-1082", "provider": "crossref", "name": "Journal of Finance",
+                  "issn": "0022-1082", "tier": "TOP", "api_url": "https://api.crossref.org"}
+        scan = CrossrefJournalSource(source, "2026-09-11T09:00:00+08:00", session).scan("2026-09-18T09:00:00+08:00")
+        query = parse_qs(urlsplit(session.url).query)
+        self.assertIn("from-index-date:2026-08-28", query["filter"][0])
+        self.assertIn("until-index-date:2026-09-18", query["filter"][0])
+        self.assertIn("from-pub-date:2026-03-22", query["filter"][0])
+        self.assertIn("until-pub-date:2026-09-18", query["filter"][0])
+        self.assertEqual(scan.coverage.split(";")[0], "crossref-incremental")
+        self.assertEqual(scan.observations[0]["official_url"], "https://doi.org/10.1234/test.1")
+        self.assertEqual(scan.observations[0]["abstract"], "We study firm boundaries.")
+        self.assertEqual(scan.observations[0]["tier"], "TOP")
+
+    def test_crossref_empty_window_is_success_and_oversized_window_fails(self):
+        class CrossrefSession:
+            def __init__(inner, total):
+                inner.total = total
+            def get(inner, url, **kwargs):
+                return FakeResponse(url, json.dumps({"message": {"total-results": inner.total, "items": []}}))
+
+        source = {"provider": "crossref", "name": "Economic Journal", "issn": "0013-0133",
+                  "api_url": "https://api.crossref.org"}
+        scan = CrossrefJournalSource(source, None, CrossrefSession(0)).scan("2026-09-18T09:00:00+08:00")
+        self.assertEqual(scan.observations, [])
+        self.assertTrue(scan.coverage.startswith("crossref-baseline"))
+        with self.assertRaisesRegex(SourceError, "safe one-page limit"):
+            CrossrefJournalSource(source, None, CrossrefSession(1001)).scan("2026-09-18T09:00:00+08:00")
 
 
 if __name__ == "__main__":

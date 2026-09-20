@@ -1,20 +1,20 @@
 # Economics Research Intelligence
 
-面向经济学、金融学和管理学研究的中英文文献监控项目。它把**用户指定的中文期刊官网**与**明确配置的国际期刊及工作论文订阅源**汇入同一 `ResearchWork` 库，按首次观察记录新工作，追踪可核实的版本变化，并生成带来源链接的中文研究雷达。
+面向经济学、金融学和管理学研究的中英文文献监控项目。它把**用户指定的中文期刊官网**与**按校级目录明确选定的英文期刊**汇入同一 `ResearchWork` 库，按首次观察记录新工作，追踪可核实的版本变化，并生成带来源链接的中文研究雷达。
 
 ## 当前可运行能力
 
 | 能力 | 实现方式 |
 | --- | --- |
 | 中文官网白名单 | 预设包含用户指定的 11 本期刊。10 本已有官网采集程序：8 本在 2026-09-19 实时验证成功，另 2 本因官网证书或 502 暂时失败；《管理世界》官网持续超时，明确标为外部阻塞。 |
-| 英文工作论文和期刊 | RSS/Atom 订阅源适配器；CEPR 官网公布的 Discussion Papers RSS 提供可用预设。NBER、RePEc/NEP、SSRN 和英文期刊需要用户提供已核实的源地址。 |
+| 英文目标期刊 | 预设采用《浙江财经大学中外文学术期刊定级管理办法（2020年修订）》：经济与金融 TOP 8 本、`ECONOMICS, BUSINESS FINANCE` 一级 A 93 本，共 101 本。按 ISSN 查询 Crossref 期刊作品元数据，DOI 链接回到出版社页面。 |
 | ResearchWork 与版本 | DOI、来源稳定 ID、官方 URL 优先；标题和作者高相似度时合并，不确定的谱系留待人工核对。 |
 | 首次观察 | 首次成功扫描建立基线；后续扫描把新增工作与出版状态或版本变化分开。所有已发现记录进入状态库，包括低相关记录。 |
 | 经济学分析 | 双语概念词表、方法与数据名识别、多维相关度；提炼研究问题、数据、方法、发现、机制与适用条件，并保存原文证据。 |
 | 论文总结 | 默认本地原文摘录；可配置模型生成中文归纳。支持导入与已有论文版本绑定的正文；模型结果须通过引文与数字检查，失败可重试。 |
 | 邮件交付 | 默认生成 `.eml`、HTML、纯文本和 A–F Markdown 周报；云端任务可在每周一合并为一封邮件，经 TLS SMTP 投递。 |
 
-中文采集同时支持静态 HTML、AJCASS 官方公开接口和北京大学“期次页面到论文 PDF”的两级结构。扫描失败、证书失效或栏目没有匹配到论文链接时，会显示为覆盖不完整，不会变成“无新文”。`blocked` 期刊会在邮件中说明官网阻塞及证据边界。RSS 快照只能代表该订阅源提供的条目，不能证明整个平台已被穷尽。论文总结明确标注标题、摘要或用户提供正文的材料范围；缺失字段保持待核实。
+中文采集同时支持静态 HTML、AJCASS 官方公开接口和北京大学“期次页面到论文 PDF”的两级结构。扫描失败、证书失效或栏目没有匹配到论文链接时，会显示为覆盖不完整，不会变成“无新文”。`blocked` 期刊会在邮件中说明官网阻塞及证据边界。英文检索依赖出版社向 Crossref 登记的元数据，不能替代出版社官网或全文数据库的完整性证明。论文总结明确标注标题、摘要或用户提供正文的材料范围；缺失字段保持待核实。
 
 ## 快速开始
 
@@ -24,13 +24,13 @@ python -m unittest discover -s tests -v
 research-radar --config presets/corporate-finance-firm-boundaries.yaml --workdir .literature-monitor/corporate-finance-firm-boundaries
 ```
 
-首次运行建立基线，并在邮件中展示“首次收录的文献”。后续运行把新工作、出版变化和提炼更新分开。命令默认打印 `workdir/emails/` 下的 `.eml` 邮件草稿路径；同目录保存 HTML 预览和纯文本版本。原有周报位于 `workdir/digests/`，状态和研究地图位于 `workdir/`。`workdir` 不应提交到公开仓库。
+首次运行只建立逐来源比较基线，不把基线论文写成新文，也不为它们批量生成论文卡片。后续运行仅整理相较上次成功扫描新增的论文或明确出版版本变化；没有新文的期刊从论文部分跳过。邮件和 Markdown 报告开头均列出本次配置的全部期刊，并明确标出未完成项。命令默认打印 `workdir/emails/` 下的 `.eml` 邮件草稿路径；同目录保存 HTML 预览和纯文本版本。原有周报位于 `workdir/digests/`，状态和研究地图位于 `workdir/`。`workdir` 不应提交到公开仓库。
 
 返回码：`0` 本次扫描与提炼完成；`2` 部分来源失败；`1` 全部来源失败；`3` 配置、状态或文件错误；`4` 模型提炼仍有待完成任务。扫描错误优先于 `4`。失败来源的上次成功扫描时间会保留，邮件会点名覆盖缺口。
 
 ## 论文总结与邮件
 
-默认无需模型密钥即可生成有原文依据的摘录邮件。英文材料在摘录模式中保留英文原句；配置 `summarization.mode: model` 可生成中文归纳。邮件包含主题、重点论文、其他期刊更新、首次收录、补充提炼、研究关联与原文链接。
+默认无需模型密钥即可生成有原文依据的摘录邮件。英文材料在摘录模式中保留英文原句；配置 `summarization.mode: model` 可生成中文归纳。邮件先列出全部目标期刊，再呈现本期新增论文、出版版本变化、研究关联、原文依据与覆盖缺口。
 
 已有检索结果可以直接补做总结并预览邮件：
 
@@ -60,9 +60,13 @@ research-radar --config presets/corporate-finance-firm-boundaries.yaml --workdir
 
 先对一个期刊用本地样例或少量真实页面验证选择器、分页和官网链接。若“下一页”是动态按钮而没有可见链接，运行会报告覆盖失败，需开发该站专用适配器。
 
-## 加入国际来源
+## 英文期刊目录与检索
 
-在 `international_monitor.sources` 添加 `provider`（`nber`、`cepr`、`repec`、`ssrn`、`journal`）、`name`、`feed_url`。前四类订阅地址必须在相应机构域名下；`journal` 使用用户明确指定的期刊订阅源。CEPR 的源地址见[官网 RSS 列表](https://cepr.org/rss-feeds)；RePEc 的 NEP 提供按领域订阅源，见[官方说明](https://repec.org/)和[NEP 列表](https://ideas.repec.org/n/)。不为 NBER 或 SSRN 猜测未核实的订阅地址。
+预设通过 `international_monitor.catalogs` 启用 `zufe-economics-finance-2020`。可审计的 101 本名称、ISSN 和级别保存在[期刊目录](research_radar/data/zufe_economics_finance_2020.yaml)，由所附校级文件的外文 TOP 表和一级 A `ECONOMICS, BUSINESS FINANCE` 表逐项提取。加载配置时会校验 ISSN 校验位、名称、级别和重复项。
+
+程序调用 Crossref 的 `/journals/{issn}/works` 接口。每次查询覆盖“上次成功扫描时间前 14 天至本次扫描时间”的索引窗口，并限定出版日期在最近 180 天；重叠窗口处理延迟登记，持久状态按 DOI 去重。若结果超过单页 1000 条，来源会明确失败，程序不会静默截断。首次基线同样使用该窗口，但不进入新文邮件。Crossref 是开放 DOI 元数据注册系统，字段完整性取决于出版社登记；它不是出版社官网全文接口。
+
+通用 RSS/Atom 适配器仍支持 `nber`、`cepr`、`repec`、`ssrn` 和 `journal`，但当前预设不混入工作论文来源。
 
 ## 身份与时间语义
 
@@ -74,7 +78,7 @@ research-radar --config presets/corporate-finance-firm-boundaries.yaml --workdir
 ## 目录
 
 - `research_radar/`：采集、材料读取、论文提炼、ResearchWork 状态与邮件。
-- `research_radar/data/`：双语经济概念和中国经济语境词表。
+- `research_radar/data/`：双语经济概念、中国经济语境词表和英文目标期刊目录。
 - `presets/`：可编辑的研究方向配置。
 - `references/`：来源、识别策略、论文生命周期与报告规范。
 - `schemas/`：监控配置和持久状态结构。

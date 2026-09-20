@@ -10,6 +10,7 @@ from email.utils import format_datetime, make_msgid
 from html import escape
 from pathlib import Path
 
+from .config import journal_target_groups
 from .normalize import url_key
 from .summaries import FIELD_LABELS, SCOPE_LABELS, TYPE_LABELS
 
@@ -29,7 +30,7 @@ def _card(work: dict, event: dict, change_type: str, detailed: bool) -> tuple[st
     labels = {"new": "新增论文", "updated": "出版状态或版本更新", "baseline": "首次基线收录",
               "enriched": "来源材料补充", "summary_updated": "提炼或选题关联更新"}
     title = event.get("title") or work["title"]
-    source = event["source_name"]
+    source = event["source_name"] + (f"（{event['tier']}）" if event.get("tier") else "")
     author = "、".join(event.get("authors") or work.get("authors") or []) or "来源未提供"
     info = f"{author}｜{source}｜{labels.get(change_type, change_type)}"
     plain = [title, info, "原文：" + event["official_url"]]
@@ -112,28 +113,36 @@ def render_mail(config: dict, state: dict, changes: dict, scans: list, failures:
     counts = {kind: len({c["work_id"] for c in changes.get(kind, [])}) for kind in ("new", "updated", "baseline")}
     date = now[:10]
     subject = f"{email.get('subject_prefix', '经济学文献简报')}｜{date}｜新增 {counts['new']} 篇"
-    if counts["baseline"]:
-        subject += f" · 基线收录 {counts['baseline']} 篇"
     if summaries_only:
         subject = f"{email.get('subject_prefix', '经济学文献简报')}｜{date}｜已收录文献提炼"
     elif failures:
         subject += " · 部分来源未完成"
     greeting = email.get("greeting", "你好，")
     intro = f"以下是本次文献简报。关注方向：{config['topic']['statement']}。"
-    overview = f"新增论文 {counts['new']} 篇；出版状态或版本更新 {counts['updated']} 篇；首次基线收录 {counts['baseline']} 篇。"
+    overview = f"新增论文 {counts['new']} 篇；出版状态或版本更新 {counts['updated']} 篇；建立比较基线 {counts['baseline']} 条。基线记录不作为本期新文展示。"
     plain = ["主题：" + subject, "", greeting, "", intro, overview]
     html = ['<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">',
             f'<title>{escape(subject)}</title></head><body style="margin:0;background:#f4f6f8;color:#233041;font-family:Arial,\'Microsoft YaHei\',sans-serif;line-height:1.75">',
             '<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="720" cellspacing="0" cellpadding="0" style="width:100%;max-width:720px;background:#fff"><tr><td style="padding:28px">',
             '<p style="font-size:12px;color:#587188;letter-spacing:2px">ECONOMICS RESEARCH INTELLIGENCE</p>',
             f'<h1 style="font-size:24px;line-height:1.4">{escape(subject)}</h1><p>{escape(greeting)}</p><p>{escape(intro)}</p><p>{escape(overview)}</p>']
+    target_groups = journal_target_groups(config)
+    target_count = sum(len(names) for _, names in target_groups)
+    plain += ["", f"本次检索期刊名单（{target_count} 本，含明确标注的未完成项）", ""]
+    html.append(f'<h2 style="font-size:20px;border-bottom:2px solid #dce4ec;padding-bottom:8px">本次检索期刊名单（{target_count} 本，含明确标注的未完成项）</h2>')
+    for label, names in target_groups:
+        plain.append(f"{label}（{len(names)} 本）：" + "；".join(names))
+        html.append(f'<h3 style="font-size:16px;margin-bottom:4px">{escape(label)}（{len(names)} 本）</h3><ol style="margin-top:4px;padding-left:24px;columns:2">')
+        html.extend(f"<li>{escape(name)}</li>" for name in names)
+        html.append("</ol>")
     if summaries_only:
         note = "本次整理已有文献，未重新扫描期刊；以下覆盖信息为上次成功扫描记录。"
         plain.append(note)
         html.append(f'<p style="color:#687585">{escape(note)}</p>')
-    groups = {"重点论文": [], "中文期刊其他更新": [], "国际来源其他更新": [], "首次收录的文献": [], "补充提炼与研究关联更新": []}
+    groups = {"重点论文": [], "中文期刊其他更新": [], "英文期刊其他更新": [], "英文工作论文更新": []}
     seen = set()
-    for kind in ("new", "baseline", "updated", "enriched", "summary_updated"):
+    visible_kinds = ("summary_updated",) if summaries_only else ("new", "updated")
+    for kind in visible_kinds:
         for change in changes.get(kind, []):
             work_id = change["work_id"]
             if work_id in seen:
@@ -142,30 +151,24 @@ def render_mail(config: dict, state: dict, changes: dict, scans: list, failures:
             work = state["works"][work_id]
             event = work["versions"][-1]
             score = sum(work.get("reading_relevance", {}).get("scores", {}).values())
-            if kind == "baseline":
-                group = "首次收录的文献"
-            elif kind in {"enriched", "summary_updated"}:
-                group = "补充提炼与研究关联更新"
-            elif score >= 2:
+            if score >= 2:
                 group = "重点论文"
+            elif event["kind"] == "working_paper":
+                group = "英文工作论文更新"
             else:
-                group = "中文期刊其他更新" if event["kind"] == "chinese_journal" else "国际来源其他更新"
+                group = "中文期刊其他更新" if event["kind"] == "chinese_journal" else "英文期刊其他更新"
             groups[group].append((score, work, event, kind))
     for label, cards in groups.items():
         if not cards:
             continue
         plain += ["", label, ""]
         html.append(f'<h2 style="font-size:20px;border-bottom:2px solid #dce4ec;padding-bottom:8px">{escape(label)}</h2>')
-        if label == "首次收录的文献":
-            note = "以下论文属于首次扫描建立的基线，不能据此认定为本期新发表。"
-            plain.append(note)
-            html.append(f"<p>{escape(note)}</p>")
         for score, work, event, kind in sorted(cards, key=lambda c: c[0], reverse=True):
             text, markup = _card(work, event, kind, score >= 2 or "full-text" in work.get("summary", {}).get("scope", ""))
             plain += [text, ""]
             html.append(markup)
     if not seen:
-        note = "本次没有可列出的新增、版本变化或提炼更新；各来源是否完成扫描请见下方。"
+        note = "本次没有可列出的新增论文或出版版本变化；没有新文的期刊已从论文部分跳过。"
         plain += ["", note]
         html.append(f"<p>{escape(note)}</p>")
     plain += ["", "来源覆盖", ""]
@@ -175,7 +178,10 @@ def render_mail(config: dict, state: dict, changes: dict, scans: list, failures:
         coverage = [f"{row['source_name']}：上次成功扫描 {row['last_successful_scan_at']}，观察到 {row['candidate_count']} 条；范围 {row['coverage']}。"
                     for row in state.get("source_scans", {}).values()]
     else:
-        coverage = [f"{scan.source_name}：扫描完成，观察到 {len(scan.observations)} 条；范围 {scan.coverage}。" for scan in scans]
+        changed_sources = {row["event"]["source_id"] for kind in ("new", "updated") for row in changes.get(kind, [])}
+        journal_scans = [scan for scan in scans if scan.kind in {"chinese_journal", "english_journal"}]
+        skipped = sum(scan.source_id not in changed_sources for scan in journal_scans)
+        coverage = [f"成功完成 {len(scans)} 个来源；其中 {skipped} 本期刊没有新增论文或出版版本变化，已从论文部分跳过。"] if scans else []
         coverage += [f"{f['source_name']}：覆盖不完整；{f['error']}。" for f in failures]
     for journal in config["chinese_monitor"]["journals"]:
         if journal.get("status") in {"pending", "blocked"}:
