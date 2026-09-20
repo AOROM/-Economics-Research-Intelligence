@@ -39,7 +39,8 @@ def _save_pending(state: dict, changes: dict) -> None:
 
 
 def run(config_path: Path, workdir: Path, *, summaries_only: bool = False, retry_summaries: bool = False,
-        fulltext: Path | None = None, work_id: str | None = None, fulltext_source: str | None = None) -> tuple[int, Path]:
+        fulltext: Path | None = None, work_id: str | None = None, fulltext_source: str | None = None,
+        defer_report_ack: bool = False) -> tuple[int, Path]:
     """Run one cycle; retain the legacy (code, Markdown path) Python API.
 
     The CLI prints the .eml draft by default. All formats share one stem.
@@ -87,7 +88,10 @@ def run(config_path: Path, workdir: Path, *, summaries_only: bool = False, retry
     report = render_mail(config, updated, changes, scans, failures, now, summary_result, summaries_only=summaries_only)
     write_mail(report, workdir / "emails", stem, config, now)
     save_json_atomic(workdir / "research_map.json", research_map(updated))
-    updated.pop("pending_report", None)
+    # Interactive runs acknowledge the report after all local files exist. A
+    # delivery runner defers acknowledgement until its SMTP server accepts it.
+    if not defer_report_ack:
+        updated.pop("pending_report", None)
     save_json_atomic(state_path, updated)
     incomplete = summary_result["pending"] + summary_result["failed"] + summary_result["awaiting_configuration"]
     code = (4 if incomplete else 0) if summaries_only or (scans and not failures) else (2 if scans else 1)

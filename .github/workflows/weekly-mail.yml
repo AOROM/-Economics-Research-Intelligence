@@ -1,0 +1,67 @@
+name: weekly literature email
+
+on:
+  schedule:
+    # 09:00 every Monday in Asia/Shanghai (GitHub cron uses UTC).
+    - cron: "0 1 * * 1"
+  workflow_dispatch:
+    inputs:
+      initialize:
+        description: Create encrypted baseline state on the first run
+        required: false
+        default: false
+        type: boolean
+      recovery:
+        description: Deliver normally, mark a verified message accepted, or allow retry
+        required: false
+        default: deliver
+        type: choice
+        options:
+          - deliver
+          - accepted
+          - retry
+      recovery_period:
+        description: Monday date (YYYY-MM-DD) for accepted/retry recovery
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: economics-research-intelligence-weekly-mail
+  cancel-in-progress: false
+
+jobs:
+  deliver:
+    if: ${{ vars.RADAR_WEEKLY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      RADAR_STATE_KEY: ${{ secrets.RADAR_STATE_KEY }}
+      RADAR_SMTP_USERNAME: ${{ secrets.RADAR_SMTP_USERNAME }}
+      RADAR_SMTP_PASSWORD: ${{ secrets.RADAR_SMTP_PASSWORD }}
+      RADAR_MAIL_TO: ${{ secrets.RADAR_MAIL_TO }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install monitor
+        run: python -m pip install -e ".[cloud]"
+      - name: Initialize, scan, summarize, and deliver
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.recovery == 'deliver' && inputs.initialize }}
+        run: research-radar-weekly --config presets/corporate-finance-firm-boundaries.yaml --workdir .literature-monitor/corporate-finance-firm-boundaries --initialize
+      - name: Scan, summarize, and deliver
+        if: ${{ github.event_name != 'workflow_dispatch' || (inputs.recovery == 'deliver' && inputs.initialize != true) }}
+        run: research-radar-weekly --config presets/corporate-finance-firm-boundaries.yaml --workdir .literature-monitor/corporate-finance-firm-boundaries
+      - name: Resolve a verified uncertain delivery
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.recovery != 'deliver' }}
+        env:
+          RECOVERY_PERIOD: ${{ inputs.recovery_period }}
+          RECOVERY_OUTCOME: ${{ inputs.recovery }}
+        run: research-radar-weekly --config presets/corporate-finance-firm-boundaries.yaml --workdir .literature-monitor/corporate-finance-firm-boundaries --resolve-period "$RECOVERY_PERIOD" --resolution "$RECOVERY_OUTCOME"

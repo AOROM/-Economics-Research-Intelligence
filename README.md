@@ -12,7 +12,7 @@
 | 首次观察 | 首次成功扫描建立基线；后续扫描把新增工作与出版状态或版本变化分开。所有已发现记录进入状态库，包括低相关记录。 |
 | 经济学分析 | 双语概念词表、方法与数据名识别、多维相关度；提炼研究问题、数据、方法、发现、机制与适用条件，并保存原文证据。 |
 | 论文总结 | 默认本地原文摘录；可配置模型生成中文归纳。支持导入与已有论文版本绑定的正文；模型结果须通过引文与数字检查，失败可重试。 |
-| 邮件交付 | 默认生成 `.eml` 邮件草稿，同时保存 HTML 预览、纯文本邮件、A–F Markdown 周报和长期研究地图。 |
+| 邮件交付 | 默认生成 `.eml`、HTML、纯文本和 A–F Markdown 周报；云端任务可在每周一合并为一封邮件，经 TLS SMTP 投递。 |
 
 中文采集同时支持静态 HTML、AJCASS 官方公开接口和北京大学“期次页面到论文 PDF”的两级结构。扫描失败、证书失效或栏目没有匹配到论文链接时，会显示为覆盖不完整，不会变成“无新文”。`blocked` 期刊会在邮件中说明官网阻塞及证据边界。RSS 快照只能代表该订阅源提供的条目，不能证明整个平台已被穷尽。论文总结明确标注标题、摘要或用户提供正文的材料范围；缺失字段保持待核实。
 
@@ -38,11 +38,19 @@ research-radar --config presets/corporate-finance-firm-boundaries.yaml --workdir
 research-radar --config presets/corporate-finance-firm-boundaries.yaml --workdir .literature-monitor/corporate-finance-firm-boundaries --summaries-only --format html
 ```
 
-模型配置、全文导入、证据规范、缓存和重试见[论文提炼与邮件使用说明](references/paper-summaries.md)。邮件草稿由支持 `.eml` 的客户端打开，HTML 可在浏览器查看；项目不包含自动发信设置。
+模型配置、全文导入、证据规范、缓存和重试见[论文提炼与邮件使用说明](references/paper-summaries.md)。邮件草稿由支持 `.eml` 的客户端打开，HTML 可在浏览器查看。
 
 仓库附有明确标注为合成样例的[邮件网页示例](examples/email-demo.html)、[纯文本示例](examples/email-demo.txt)和[邮件草稿](examples/email-demo.eml)。
 
-定时运行由宿主产品的 recurring automation、任务计划程序或 cron 执行本命令。安装此项目本身不会启动后台监控。
+## 每周自动邮件
+
+仓库包含 GitHub Actions 云端任务，按北京时间每周一 09:00（UTC 01:00）运行，不依赖个人电脑开机。一次运行会扫描全部已启用来源、整理提炼结果，并只发送一封合并邮件。来源失败会在同一封邮件中标为覆盖不完整。
+
+工作流默认关闭。启用前，在仓库 Secrets 中配置 `RADAR_SMTP_USERNAME`、`RADAR_SMTP_PASSWORD`、`RADAR_MAIL_TO` 和随机生成的 `RADAR_STATE_KEY`，再将仓库变量 `RADAR_WEEKLY_ENABLED` 设为 `true`。首次手动运行时选择 `initialize: true`，之后定时任务会恢复历史状态。SMTP 默认使用 `smtp.163.com:465` 和系统证书进行 TLS 校验；账号、授权码和收件地址不会写入配置文件或日志。
+
+运行历史保存在独立的 `research-radar-state` 分支，业务状态集中在经 Fernet 认证加密的 `state.enc`，分支另含一份不带业务数据的说明。发送前、发送中和服务器确认接收后均会保存状态。服务器明确拒收时保留待发送事件供下次重试；若连接中断导致结果不确定，自动重发会暂停，避免同一批内容重复投递。核对收件箱后，可在手动工作流中用 `accepted` 标记已收到，或用 `retry` 表示确认未收到；两种恢复操作都必须填写对应周一日期。GitHub 定时任务可能因平台负载略有延迟，因此 09:00 是计划时间而非送达时刻。
+
+本地草稿命令仍可单独使用；安装项目本身不会在本机启动后台进程。
 
 ## 加入中文期刊
 

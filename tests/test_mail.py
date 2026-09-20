@@ -115,6 +115,18 @@ class MailIntegrationTests(unittest.TestCase):
             saved = json.loads((workdir / "state.json").read_text(encoding="utf-8"))
             self.assertNotIn("pending_report", saved)
 
+    def test_delivery_run_defers_pending_acknowledgement_until_smtp_acceptance(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = root / "config.yaml"
+            config.write_text(CONFIG, encoding="utf-8")
+            workdir = root / "monitor"
+            with patch("research_radar.cli.ChineseOfficialSource.scan", return_value=scan(observation())), patch("research_radar.cli.InternationalFeedSource.scan", return_value=ScanResult("cepr:CEPR", "CEPR", "working_paper", [], 1, "feed-snapshot")):
+                code, _ = run(config, workdir, defer_report_ack=True)
+            self.assertEqual(code, 0)
+            saved = json.loads((workdir / "state.json").read_text(encoding="utf-8"))
+            self.assertTrue(saved["pending_report"])
+
     def test_unconfigured_model_reports_partial_summary_without_losing_discoveries(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
