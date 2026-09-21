@@ -1,6 +1,9 @@
 name: weekly literature email
 
 on:
+  push:
+    branches:
+      - main
   schedule:
     # GitHub cron uses UTC. Avoid the top of the hour, where scheduled
     # workflows are more likely to be delayed or dropped. Later entries are
@@ -39,7 +42,8 @@ concurrency:
 
 jobs:
   deliver:
-    if: ${{ vars.RADAR_WEEKLY_ENABLED == 'true' }}
+    # Pushes run this job only for an explicit, auditable recovery commit.
+    if: ${{ vars.RADAR_WEEKLY_ENABLED == 'true' && (github.event_name != 'push' || contains(github.event.head_commit.message, '[weekly-recovery]')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:

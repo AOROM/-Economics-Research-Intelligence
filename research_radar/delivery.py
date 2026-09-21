@@ -20,6 +20,26 @@ class DeliveryError(RuntimeError):
     pass
 
 
+def _smtp_rejection(exc: smtplib.SMTPException) -> str:
+    """Describe an explicit SMTP rejection without exposing addresses or server text."""
+    if isinstance(exc, smtplib.SMTPAuthenticationError):
+        category = "authentication"
+        codes = [getattr(exc, "smtp_code", None)]
+    elif isinstance(exc, smtplib.SMTPSenderRefused):
+        category = "sender"
+        codes = [getattr(exc, "smtp_code", None)]
+    elif isinstance(exc, smtplib.SMTPRecipientsRefused):
+        category = "recipient"
+        codes = [value[0] for value in getattr(exc, "recipients", {}).values()
+                 if isinstance(value, tuple) and value]
+    else:
+        category = "message content"
+        codes = [getattr(exc, "smtp_code", None)]
+    safe_codes = sorted({str(code) for code in codes if isinstance(code, int)})
+    suffix = " (code " + ",".join(safe_codes) + ")" if safe_codes else ""
+    return "SMTP rejected " + category + suffix
+
+
 @dataclass(frozen=True)
 class SmtpSettings:
     host: str
@@ -135,7 +155,7 @@ def send_report(eml_path: Path, workdir: Path, period: str, settings: SmtpSettin
         if refused:
             raise smtplib.SMTPRecipientsRefused(refused)
     except (smtplib.SMTPAuthenticationError, smtplib.SMTPSenderRefused, smtplib.SMTPRecipientsRefused, smtplib.SMTPDataError) as exc:
-        record.update(status="failed", error="SMTP rejected authentication, recipient or message")
+        record.update(status="failed", error=_smtp_rejection(exc))
         save_json_atomic(workdir / "delivery.json", ledger)
         checkpoint()
         raise DeliveryError(record["error"]) from exc

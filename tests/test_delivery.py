@@ -93,10 +93,29 @@ class DeliveryTests(unittest.TestCase):
             eml = make_runtime(root)
             smtp = FakeSmtp(smtplib.SMTPDataError(554, b"rejected"))
             with patch("research_radar.delivery.smtplib.SMTP_SSL", return_value=smtp):
-                with self.assertRaises(DeliveryError):
+                with self.assertRaisesRegex(DeliveryError, r"message content \(code 554\)"):
                     send_report(eml, root, PERIOD, self.settings(), NOW)
             self.assertEqual(check_period(root, PERIOD), "failed")
             self.assertIn("pending_report", json.loads((root / "state.json").read_text(encoding="utf-8")))
+
+    def test_smtp_rejection_diagnostics_hide_addresses_and_server_text(self):
+        cases = [
+            (smtplib.SMTPAuthenticationError(535, b"bad secret"), "authentication (code 535)"),
+            (smtplib.SMTPSenderRefused(553, b"bad sender", "private@163.com"), "sender (code 553)"),
+            (smtplib.SMTPRecipientsRefused({"private@example.com": (550, b"bad recipient")}),
+             "recipient (code 550)"),
+        ]
+        for error, expected in cases:
+            with self.subTest(expected=expected), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                eml = make_runtime(root)
+                smtp = FakeSmtp(error)
+                with patch("research_radar.delivery.smtplib.SMTP_SSL", return_value=smtp):
+                    with self.assertRaisesRegex(DeliveryError, expected.replace("(", r"\(").replace(")", r"\)")) as raised:
+                        send_report(eml, root, PERIOD, self.settings(), NOW)
+                public_error = str(raised.exception)
+                self.assertNotIn("private", public_error)
+                self.assertNotIn("secret", public_error)
 
     def test_disconnect_during_send_blocks_automatic_resend(self):
         with tempfile.TemporaryDirectory() as temp:
