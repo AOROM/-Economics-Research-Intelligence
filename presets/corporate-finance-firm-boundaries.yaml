@@ -18,13 +18,142 @@ email:
   greeting: 你好，
   signature: 经济学研究雷达
 
-# 当前定时预设仅监控校级目录中的 8 本英文 TOP 期刊。
-# 保留空的中文监控安全策略，防止配置被自动扩展。
+# 用户指定的中文期刊白名单。所有可核实官网都已配置；blocked 表示官网本身当前不可用。
 chinese_monitor:
   official_site_only: true
   auto_expand_journals: false
   allow_database_discovery: false
-  journals: []
+  journals:
+    - name: 经济研究
+      homepage: https://erj.ajcass.com/
+      allowed_hosts: [erj.ajcass.com, api.ajcass.com]
+      priority: critical
+      status: active
+      adapter: ajcass_api
+      api_url: https://api.ajcass.com/api
+      journal_id: 201803050001
+      detail_url_template: 'https://erj.ajcass.com/#/issue?id={id}&year={year}&issue={issue}'
+      detail_uses_issue_context: false
+      fetch_details: true
+      label: 当期目录
+    - name: 管理世界
+      homepage: http://www.mwm.net.cn/
+      priority: critical
+      status: blocked
+      note: 杂志社唯一官网在多次 HTTP/HTTPS 实测中均超时，无法取得可验证的目录结构；未改用知网发现论文
+    - name: 经济学（季刊）
+      homepage: https://nsd.pku.edu.cn/xzyj/cbw/jjxjk/qkml/index.htm
+      priority: critical
+      status: active
+      adapter: pku_issue
+      issue_index_url: https://nsd.pku.edu.cn/xzyj/cbw/jjxjk/qkml/index.htm
+      issue_link_regex: '/xzyj/cbw/jjxjk/qkml/[0-9a-f]{32}\.htm'
+      issue_title_regex: '第\s*[0-9]+\s*卷第\s*[0-9]+\s*期'
+      label: 当期目录
+    - name: 世界经济
+      homepage: https://sjjj.magtech.com.cn/
+      priority: critical
+      status: active
+      surfaces:
+        - label: 网络首发
+          url: https://sjjj.magtech.com.cn/CN/online_first
+          item_selector: ul.article-list > li
+          title_selector: .j-title-1 a
+          link_selector: .j-title-1 a
+          author_selector: .j-author
+          abstract_selector: .j-abstract
+        - label: 当期目录
+          url: https://sjjj.magtech.com.cn/CN/current
+          item_selector: ul.article-list > li
+          title_selector: .j-title-1 a
+          link_selector: .j-title-1 a
+          author_selector: .j-author
+          abstract_selector: .j-abstract
+    - name: 中国工业经济
+      homepage: https://ciejournal.ajcass.com/
+      priority: critical
+      status: active
+      surfaces:
+        - label: 当期目录
+          url: https://ciejournal.ajcass.com/
+          item_selector: 'div.neirong:not(.hid) table tr:nth-of-type(odd)'
+          title_selector: a[href*="/Magazine/Show"]
+          link_selector: a[href*="/Magazine/Show"]
+          author_selector: span
+    - name: 金融研究
+      homepage: http://www.jryj.org.cn/CN/1002-7246/home.shtml
+      priority: critical
+      status: active
+      allow_http: true
+      surfaces:
+        - label: 当期目录
+          url: http://www.jryj.org.cn/CN/1002-7246/current.shtml
+          item_selector: 'td:has(> a.txt_biaoti)'
+          title_selector: a.txt_biaoti
+          link_selector: a.txt_biaoti
+          author_selector: .abs_zuozhe
+          abstract_selector: .white_content
+    - name: 财贸经济
+      homepage: https://cmjj.ajcass.com/
+      priority: critical
+      status: active
+      surfaces:
+        - label: 当期目录
+          url: https://cmjj.ajcass.com/
+          item_selector: 'ul#ccc > li'
+          title_selector: h3 a
+          link_selector: h3 a
+          title_strip_regex: '^\[[0-9]+\]\s*'
+          author_selector: p
+          abstract_selector: a.zy
+          abstract_attribute: title
+    - name: 数量经济技术经济研究
+      homepage: https://www.jqte.net/sljjjsjjyj/ch/index.aspx
+      priority: critical
+      status: active
+      surfaces:
+        - label: 当期目录
+          url: https://www.jqte.net/sljjjsjjyj/ch/index.aspx
+          link_path_regex: '/sljjjsjjyj/ch/reader/view_abstract\.aspx'
+          article_metadata: true
+    - name: 经济学动态
+      homepage: https://jjxdt.ajcass.com/
+      allowed_hosts: [jjxdt.ajcass.com, api.ajcass.com]
+      priority: critical
+      status: active
+      adapter: ajcass_api
+      api_url: https://api.ajcass.com/api
+      journal_id: 201903080001
+      detail_url_template: 'https://jjxdt.ajcass.com/#/issue?id={id}&year={year}&issue={issue}'
+      detail_uses_issue_context: true
+      fetch_details: true
+      label: 当期目录
+    - name: 经济理论与经济管理
+      homepage: http://jjll.ruc.edu.cn/
+      priority: critical
+      status: active
+      allow_http: true
+      surfaces:
+        - label: 当期目录
+          url: http://jjll.ruc.edu.cn/CN/1000-596X/current.shtml
+          item_selector: div.noselectrow
+          title_selector: a.biaoti
+          link_selector: a.biaoti
+          author_selector: dd.zuozhe
+          abstract_selector: .white_content
+    - name: 财经研究
+      homepage: https://qks.sufe.edu.cn/J/CJYJ.html/CN
+      priority: critical
+      status: active
+      surfaces:
+        - label: 最新论文
+          url: https://qks.sufe.edu.cn/J/CJYJ.html/CN
+          item_selector: 'div#index_na > div.art.section_1'
+          title_selector: .title a
+          link_selector: .title a
+          author_selector: .authors
+          abstract_selector: .abs
+          article_metadata: true
 
 # 校级目录中的经济与金融外文 TOP 期刊 8 本。
 # 目录条目按 ISSN 展开为 Crossref 期刊检索源；Crossref 提供 DOI 元数据，论文链接回到 DOI/出版社页面。
@@ -32,4 +161,23 @@ international_monitor:
   catalogs:
     - zufe-economics-finance-2020
   sources: []
+
+# 添加其它中文期刊的配置示意（请依据实际官网 HTML 填写，不要照抄选择器）：
+#   - name: 某经济学期刊
+#     homepage: https://journal.example.org/
+#     allowed_hosts: [journal.example.org]
+#     priority: critical
+#     surfaces:
+#       - label: 网络首发
+#         url: https://journal.example.org/online
+#         item_selector: .article-item
+#         title_selector: .article-title
+#         link_selector: .article-title a
+#         author_selector: .authors
+#         date_selector: .online-date
+#         next_selector: a.next
+#         max_pages: 20
+#         article:
+#           abstract_selector: .abstract
+#           doi_selector: .doi
 

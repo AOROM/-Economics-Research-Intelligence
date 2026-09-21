@@ -26,6 +26,9 @@ class PaperTableTests(unittest.TestCase):
         root = Path(__file__).parent.parent
         config = load_config(root / "presets" / "corporate-finance-firm-boundaries.yaml")
         allowed = {
+            journal["name"]
+            for journal in config["chinese_monitor"]["journals"]
+        } | {
             source["name"]
             for source in config["international_monitor"]["sources"]
             if source.get("provider") in {"crossref", "journal"}

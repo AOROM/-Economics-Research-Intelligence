@@ -32,11 +32,18 @@ international_monitor:
 
 
 class CliTests(unittest.TestCase):
-    def test_scheduled_preset_contains_only_eight_english_top_journals(self):
+    def test_scheduled_preset_contains_eleven_chinese_and_eight_english_top_journals(self):
         preset = Path(__file__).parent.parent / "presets" / "corporate-finance-firm-boundaries.yaml"
         loaded = load_config(preset)
         journals = loaded["chinese_monitor"]["journals"]
-        self.assertEqual(journals, [])
+        self.assertEqual(len(journals), 11)
+        self.assertEqual(sum(j.get("status") == "active" for j in journals), 10)
+        self.assertEqual(sum(j.get("status") == "blocked" for j in journals), 1)
+        self.assertEqual(
+            [journal["name"] for journal in journals],
+            ["经济研究", "管理世界", "经济学（季刊）", "世界经济", "中国工业经济", "金融研究",
+             "财贸经济", "数量经济技术经济研究", "经济学动态", "经济理论与经济管理", "财经研究"],
+        )
         english = loaded["international_monitor"]["sources"]
         self.assertEqual(len(english), 8)
         self.assertEqual(sum(source["tier"] == "TOP" for source in english), 8)
