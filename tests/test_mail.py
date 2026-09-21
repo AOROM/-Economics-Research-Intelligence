@@ -28,7 +28,8 @@ class MailTests(unittest.TestCase):
         config = load_config(preset)
         changes = {key: [] for key in ("new", "updated", "baseline", "enriched", "summary_updated", "possible_links")}
         report = render_mail(config, {"works": {}, "source_scans": {}}, changes, [], [], NOW, {})
-        self.assertIn("本次检索期刊名单（19 本", report.text)
+        self.assertIn("本次检索期刊名单（8 本", report.text)
+        self.assertNotIn("中文期刊（", report.text)
         self.assertIn("American Economic Review", report.text)
         self.assertIn("Review of Financial Studies", report.text)
         self.assertNotIn("英文一级A期刊", report.text)
@@ -193,3 +194,4 @@ class MailIntegrationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

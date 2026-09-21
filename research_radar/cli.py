@@ -21,7 +21,24 @@ from .state import apply_observations, load_state, research_map, save_json_atomi
 from .summaries import refresh_summaries
 
 
-def _restore_pending(state: dict, changes: dict) -> None:
+def _configured_source_keys(config: dict) -> tuple[set[str], set[str]]:
+    """Return stable IDs and names for the sources enabled by this config."""
+    source_ids = {
+        "zh:" + journal["name"]
+        for journal in config.get("chinese_monitor", {}).get("journals", [])
+    }
+    source_names = {
+        journal["name"]
+        for journal in config.get("chinese_monitor", {}).get("journals", [])
+    }
+    for source in config.get("international_monitor", {}).get("sources", []):
+        source_ids.add(source.get("id") or source["provider"] + ":" + source["name"])
+        source_names.add(source["name"])
+    return source_ids, source_names
+
+
+def _restore_pending(state: dict, changes: dict, config: dict) -> None:
+    allowed_ids, allowed_names = _configured_source_keys(config)
     for saved in state.get("pending_report", []):
         work = state["works"].get(saved["work_id"])
         if not work:
@@ -30,7 +47,11 @@ def _restore_pending(state: dict, changes: dict) -> None:
         bucket = changes.setdefault(kind, [])
         if any(row["work_id"] == saved["work_id"] and row["event"]["fingerprint"] == saved["fingerprint"] for row in bucket):
             continue
-        event = next((v for v in work["versions"] if v["fingerprint"] == saved["fingerprint"]), work["versions"][-1])
+        event = next((v for v in work["versions"] if v["fingerprint"] == saved["fingerprint"]), None)
+        if not event:
+            continue
+        if event.get("source_id") not in allowed_ids and event.get("source_name") not in allowed_names:
+            continue
         bucket.append({"work_id": saved["work_id"], "work": work, "event": event, "change_type": kind})
 
 
@@ -74,7 +95,7 @@ def run(config_path: Path, workdir: Path, *, summaries_only: bool = False, retry
         except Exception as exc:
             failures.append({"source_id": source.source_id, "source_name": getattr(source, "journal", {}).get("name") or getattr(source, "source", {}).get("name"), "error": str(exc)})
     updated, changes = apply_observations(previous, scans, config["topic"], now)
-    _restore_pending(updated, changes)
+    _restore_pending(updated, changes, config)
     _save_pending(updated, changes)
     # Keep discoveries/report events before any model call. Summaries can be
     # retried and a failed export must not swallow a new-paper notification.
@@ -137,3 +158,4 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

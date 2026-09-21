@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from research_radar.cli import run
+from research_radar.cli import _restore_pending, run
 from research_radar.config import load_config
 from research_radar.sources import ScanResult, SourceError
 
@@ -32,14 +32,11 @@ international_monitor:
 
 
 class CliTests(unittest.TestCase):
-    def test_user_journal_whitelist_has_explicit_official_coverage(self):
+    def test_scheduled_preset_contains_only_eight_english_top_journals(self):
         preset = Path(__file__).parent.parent / "presets" / "corporate-finance-firm-boundaries.yaml"
         loaded = load_config(preset)
         journals = loaded["chinese_monitor"]["journals"]
-        self.assertEqual(len(journals), 11)
-        self.assertEqual(sum(j.get("status") == "active" for j in journals), 10)
-        self.assertEqual(sum(j.get("status") == "pending" for j in journals), 0)
-        self.assertEqual(sum(j.get("status") == "blocked" for j in journals), 1)
+        self.assertEqual(journals, [])
         english = loaded["international_monitor"]["sources"]
         self.assertEqual(len(english), 8)
         self.assertEqual(sum(source["tier"] == "TOP" for source in english), 8)
@@ -47,6 +44,32 @@ class CliTests(unittest.TestCase):
         self.assertEqual(len({source["issn"] for source in english}), 8)
         self.assertEqual(english[0]["name"], "American Economic Review")
         self.assertEqual(english[-1]["name"], "Review of Financial Studies")
+
+    def test_pending_items_from_removed_sources_are_not_restored(self):
+        removed = {
+            "source_id": "zh:已移除期刊",
+            "source_name": "已移除期刊",
+            "fingerprint": "old-version",
+        }
+        state = {
+            "works": {"work-1": {"versions": [removed]}},
+            "pending_report": [{
+                "work_id": "work-1",
+                "fingerprint": "old-version",
+                "change_type": "new",
+            }],
+        }
+        config = {
+            "chinese_monitor": {"journals": []},
+            "international_monitor": {"sources": [{
+                "id": "crossref:0002-8282",
+                "provider": "crossref",
+                "name": "American Economic Review",
+            }]},
+        }
+        changes = {}
+        _restore_pending(state, changes, config)
+        self.assertEqual(changes, {"new": []})
 
     def test_pending_journal_is_reported_without_scanning(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -90,3 +113,4 @@ international_monitor:
 
 if __name__ == "__main__":
     unittest.main()
+

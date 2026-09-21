@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from research_radar.config import load_config
 from research_radar.paper_table import (GitHubPaperTable, HEADERS, render_paper_table,
                                         summarized_paper_rows, write_paper_table)
 from research_radar.summaries import refresh_summaries
@@ -21,6 +22,19 @@ def table_config(name="测试期刊"):
 
 
 class PaperTableTests(unittest.TestCase):
+    def test_published_table_contains_only_current_scheduled_journals(self):
+        root = Path(__file__).parent.parent
+        config = load_config(root / "presets" / "corporate-finance-firm-boundaries.yaml")
+        allowed = {
+            source["name"]
+            for source in config["international_monitor"]["sources"]
+            if source.get("provider") in {"crossref", "journal"}
+        }
+        with (root / "reports" / "discovered-and-summarized-papers.csv").open(
+                encoding="utf-8", newline="") as source:
+            journals = {row["来源期刊"] for row in csv.DictReader(source)}
+        self.assertLessEqual(journals, allowed)
+
     def test_table_contains_only_configured_papers_with_completed_summaries(self):
         state, work, _ = prepared()
         with tempfile.TemporaryDirectory() as temp:
@@ -107,3 +121,4 @@ class PaperTableTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
