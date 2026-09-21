@@ -52,11 +52,18 @@ class SmtpSettings:
     @classmethod
     def from_env(cls) -> "SmtpSettings":
         username = os.environ.get("RADAR_SMTP_USERNAME", "").strip()
-        password = os.environ.get("RADAR_SMTP_PASSWORD", "")
+        # GitHub Secrets can preserve whitespace copied with a value. NetEase
+        # authorization codes never use surrounding whitespace, so normalize
+        # it before authenticating and reject other common paste artifacts.
+        password = os.environ.get("RADAR_SMTP_PASSWORD", "").strip()
         sender = os.environ.get("RADAR_MAIL_FROM", username).strip()
         recipient = os.environ.get("RADAR_MAIL_TO", "").strip()
         if not username or not password or not recipient:
             raise DeliveryError("SMTP username, authorization code and recipient must be configured")
+        if password[:1] in {"'", '"'} and password[-1:] == password[:1]:
+            raise DeliveryError("SMTP authorization code must be stored without surrounding quotes")
+        if any(ord(char) < 33 or ord(char) > 126 for char in password):
+            raise DeliveryError("SMTP authorization code must contain printable ASCII without whitespace")
         for address in (username, sender, recipient):
             if any(ord(c) < 33 or ord(c) > 126 for c in address) or parseaddr(address)[1] != address or address.count("@") != 1:
                 raise DeliveryError("SMTP requires one plain ASCII sender and one recipient address")
@@ -184,3 +191,4 @@ def send_report(eml_path: Path, workdir: Path, period: str, settings: SmtpSettin
     save_json_atomic(state_path, state)
     checkpoint()
     return "accepted"
+

@@ -156,15 +156,22 @@ class DeliveryTests(unittest.TestCase):
             self.assertNotIn("pending_report", json.loads((root / "state.json").read_text(encoding="utf-8")))
 
     def test_environment_validation_and_repr_do_not_expose_password(self):
-        env = {"RADAR_SMTP_USERNAME": "sender@163.com", "RADAR_SMTP_PASSWORD": "secret-code",
+        env = {"RADAR_SMTP_USERNAME": "sender@163.com", "RADAR_SMTP_PASSWORD": "  secret-code\r\n",
                "RADAR_MAIL_TO": "reader@example.com"}
         with patch.dict("os.environ", env, clear=True):
             settings = SmtpSettings.from_env()
+        self.assertEqual(settings.password, "secret-code")
         self.assertNotIn("secret-code", repr(settings))
         with patch.dict("os.environ", {**env, "RADAR_MAIL_TO": "reader@example.com\nBcc:x@example.com"}, clear=True):
             with self.assertRaises(DeliveryError):
                 SmtpSettings.from_env()
+        for invalid in ('"secret-code"', "secret code"):
+            with self.subTest(invalid=invalid), patch.dict(
+                    "os.environ", {**env, "RADAR_SMTP_PASSWORD": invalid}, clear=True):
+                with self.assertRaises(DeliveryError):
+                    SmtpSettings.from_env()
 
 
 if __name__ == "__main__":
     unittest.main()
+
