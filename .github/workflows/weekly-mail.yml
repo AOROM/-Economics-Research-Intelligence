@@ -41,6 +41,45 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  smtp-config-check:
+    if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[smtp-config-check]') }}
+    runs-on: ubuntu-latest
+    env:
+      RADAR_SMTP_USERNAME: ${{ secrets.RADAR_SMTP_USERNAME }}
+      RADAR_SMTP_PASSWORD: ${{ secrets.RADAR_SMTP_PASSWORD }}
+      RADAR_MAIL_TO: ${{ secrets.RADAR_MAIL_TO }}
+    steps:
+      - name: Validate SMTP secret shape without connecting to the mail server
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+
+          username = os.environ.get("RADAR_SMTP_USERNAME", "").strip()
+          recipient = os.environ.get("RADAR_MAIL_TO", "").strip()
+          raw_code = os.environ.get("RADAR_SMTP_PASSWORD", "")
+          code = raw_code.strip()
+          report = {
+              "authorization_code_length": len(code),
+              "authorization_code_printable_ascii": bool(code) and all(33 <= ord(char) <= 126 for char in code),
+              "authorization_code_surrounding_quotes": len(code) >= 2 and code[0] in "'\"" and code[-1] == code[0],
+              "authorization_code_surrounding_whitespace": raw_code != code,
+              "recipient_configured": bool(recipient),
+              "sender_matches_recipient": bool(username) and username.casefold() == recipient.casefold(),
+              "username_is_full_163_address": bool(re.fullmatch(r"[^@\s]+@163\.com", username, re.IGNORECASE)),
+          }
+          print(json.dumps(report, sort_keys=True))
+          valid = (
+              report["authorization_code_printable_ascii"]
+              and not report["authorization_code_surrounding_quotes"]
+              and report["recipient_configured"]
+              and report["sender_matches_recipient"]
+              and report["username_is_full_163_address"]
+          )
+          raise SystemExit(0 if valid else 2)
+          PY
+
   deliver:
     # Pushes run this job only for an explicit, auditable recovery commit.
     if: ${{ vars.RADAR_WEEKLY_ENABLED == 'true' && (github.event_name != 'push' || contains(github.event.head_commit.message, '[weekly-recovery]')) }}
@@ -74,3 +113,4 @@ jobs:
           RECOVERY_PERIOD: ${{ inputs.recovery_period }}
           RECOVERY_OUTCOME: ${{ inputs.recovery }}
         run: research-radar-weekly --config presets/corporate-finance-firm-boundaries.yaml --workdir .literature-monitor/corporate-finance-firm-boundaries --resolve-period "$RECOVERY_PERIOD" --resolution "$RECOVERY_OUTCOME"
+
