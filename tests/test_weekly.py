@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 from zoneinfo import ZoneInfo
 
 from research_radar.weekly import execute, monday_period, resolve
+from research_radar.paper_table import TABLE_FILENAME
 
 
 class WeeklyTests(unittest.TestCase):
@@ -25,6 +26,7 @@ class WeeklyTests(unittest.TestCase):
         run.assert_not_called()
         storage_cls.return_value.restore.assert_called_once_with(initialize=False)
 
+    @patch("research_radar.weekly.GitHubPaperTable")
     @patch("research_radar.weekly.SmtpSettings.from_env", return_value=Mock())
     @patch("research_radar.weekly.GitHubState")
     @patch("research_radar.weekly.check_period", return_value="pending")
@@ -32,11 +34,12 @@ class WeeklyTests(unittest.TestCase):
     @patch("research_radar.weekly.run")
     @patch("research_radar.weekly.load_config", return_value={"timezone": "Asia/Shanghai"})
     def test_partial_coverage_still_delivers_one_consolidated_mail(self, _config, run, send, _period,
-                                                                  storage_cls, _settings):
+                                                                  storage_cls, _settings, table_cls):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             digest = root / "digests" / "weekly.md"
             run.return_value = (2, digest)
+            table_cls.return_value.publish.return_value = "updated"
             code, message = execute(Path("config.yaml"), root, initialize=True,
                                     now=datetime(2026, 9, 21, 9, tzinfo=ZoneInfo("Asia/Shanghai")))
         self.assertEqual(code, 0)
@@ -44,6 +47,7 @@ class WeeklyTests(unittest.TestCase):
         run.assert_called_once_with(Path("config.yaml"), root, defer_report_ack=True)
         storage_cls.return_value.restore.assert_called_once_with(initialize=True)
         storage_cls.return_value.checkpoint.assert_called_once_with()
+        table_cls.return_value.publish.assert_called_once_with(root / TABLE_FILENAME)
         self.assertEqual(send.call_count, 1)
         self.assertEqual(send.call_args.args[0], root / "emails" / "weekly.eml")
         self.assertEqual(send.call_args.args[2], "2026-09-21")

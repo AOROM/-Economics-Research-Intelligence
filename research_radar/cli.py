@@ -15,6 +15,7 @@ from .config import load_config
 from .digest import render_digest
 from .documents import import_fulltext
 from .mail import render_mail, write_mail
+from .paper_table import TABLE_FILENAME, write_paper_table
 from .sources import CrossrefJournalSource, ChineseOfficialSource, InternationalFeedSource, SourceError
 from .state import apply_observations, load_state, research_map, save_json_atomic
 from .summaries import refresh_summaries
@@ -90,6 +91,7 @@ def run(config_path: Path, workdir: Path, *, summaries_only: bool = False, retry
     ] + changes.get("summary_updated", [])
     _save_pending(updated, changes)
     save_json_atomic(state_path, updated)
+    write_paper_table(updated, config, workdir / TABLE_FILENAME)
     digest = render_digest(config, changes, scans, failures, now, previous)
     stem = now[:10] + "-" + now[11:19].replace(":", "") + "-" + uuid4().hex[:6]
     destination = workdir / "digests" / (stem + ".md")

@@ -13,6 +13,7 @@ from .cloud_state import CloudStateError, GitHubState
 from .config import load_config
 from .delivery import (DeliveryError, SmtpSettings, check_period,
                        resolve_uncertain, send_report)
+from .paper_table import GitHubPaperTable, PaperTableError, TABLE_FILENAME
 
 
 def monday_period(now: datetime) -> str:
@@ -45,12 +46,14 @@ def execute(config_path: Path, workdir: Path, *, initialize: bool = False,
         raise RuntimeError("Monitoring failed before a report could be delivered") from exc
 
     storage.checkpoint()
+    table_status = GitHubPaperTable().publish(workdir / TABLE_FILENAME)
     eml_path = workdir / "emails" / (digest_path.stem + ".eml")
     status = send_report(eml_path, workdir, period, settings,
                          current.isoformat(timespec="seconds"), storage.checkpoint)
     if scan_code:
-        return 0, f"Email {status} for {period}; monitoring completed with coverage/status code {scan_code}."
-    return 0, f"Email {status} for {period}; monitoring and delivery completed."
+        return 0, (f"Email {status} for {period}; monitoring completed with coverage/status code {scan_code}; "
+                   f"cumulative paper table {table_status}.")
+    return 0, f"Email {status} for {period}; monitoring and delivery completed; cumulative paper table {table_status}."
 
 
 def resolve(config_path: Path, workdir: Path, period: str, resolution: str,
@@ -91,6 +94,9 @@ def main(argv: list[str] | None = None) -> int:
     except CloudStateError as exc:
         print("Encrypted state storage stopped: " + str(exc), file=sys.stderr)
         return 6
+    except PaperTableError as exc:
+        print("Cumulative paper table stopped: " + str(exc), file=sys.stderr)
+        return 7
     except (OSError, RuntimeError, ValueError) as exc:
         print("Weekly monitoring stopped: " + str(exc), file=sys.stderr)
         return 3

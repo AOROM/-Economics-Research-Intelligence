@@ -7,11 +7,12 @@
 | 能力 | 实现方式 |
 | --- | --- |
 | 中文官网白名单 | 预设包含用户指定的 11 本期刊。10 本已有官网采集程序：8 本在 2026-09-19 实时验证成功，另 2 本因官网证书或 502 暂时失败；《管理世界》官网持续超时，明确标为外部阻塞。 |
-| 英文目标期刊 | 预设采用《浙江财经大学中外文学术期刊定级管理办法（2020年修订）》：经济与金融 TOP 8 本、`ECONOMICS, BUSINESS FINANCE` 一级 A 93 本，共 101 本。按 ISSN 查询 Crossref 期刊作品元数据，DOI 链接回到出版社页面。 |
+| 英文目标期刊 | 预设仅保留《浙江财经大学中外文学术期刊定级管理办法（2020年修订）》中的经济与金融 TOP 8 本。按 ISSN 查询 Crossref 期刊作品元数据，DOI 链接回到出版社页面。 |
 | ResearchWork 与版本 | DOI、来源稳定 ID、官方 URL 优先；标题和作者高相似度时合并，不确定的谱系留待人工核对。 |
 | 首次观察 | 首次成功扫描建立基线；后续扫描把新增工作与出版状态或版本变化分开。所有已发现记录进入状态库，包括低相关记录。 |
 | 经济学分析 | 双语概念词表、方法与数据名识别、多维相关度；提炼研究问题、数据、方法、发现、机制与适用条件，并保存原文证据。 |
 | 论文总结 | 默认本地原文摘录；可配置模型生成中文归纳。支持导入与已有论文版本绑定的正文；模型结果须通过引文与数字检查，失败可重试。 |
+| 累计论文表 | 仓库中的 [`reports/discovered-and-summarized-papers.csv`](reports/discovered-and-summarized-papers.csv) 累计列出已经完成提炼的目标期刊论文，包括题目、期刊、作者和摘要；周任务按状态重建并自动更新。 |
 | 邮件交付 | 默认生成 `.eml`、HTML、纯文本和 A–F Markdown 周报；云端任务可在每周一合并为一封邮件，经 TLS SMTP 投递。 |
 
 中文采集同时支持静态 HTML、AJCASS 官方公开接口和北京大学“期次页面到论文 PDF”的两级结构。扫描失败、证书失效或栏目没有匹配到论文链接时，会显示为覆盖不完整，不会变成“无新文”。`blocked` 期刊会在邮件中说明官网阻塞及证据边界。英文检索依赖出版社向 Crossref 登记的元数据，不能替代出版社官网或全文数据库的完整性证明。论文总结明确标注标题、摘要或用户提供正文的材料范围；缺失字段保持待核实。
@@ -26,7 +27,7 @@ research-radar --config presets/corporate-finance-firm-boundaries.yaml --workdir
 
 首次运行只建立逐来源比较基线，不把基线论文写成新文，也不为它们批量生成论文卡片。后续运行仅整理相较上次成功扫描新增的论文或明确出版版本变化；没有新文的期刊从论文部分跳过。邮件和 Markdown 报告开头均列出本次配置的全部期刊，并明确标出未完成项。命令默认打印 `workdir/emails/` 下的 `.eml` 邮件草稿路径；同目录保存 HTML 预览和纯文本版本。原有周报位于 `workdir/digests/`，状态和研究地图位于 `workdir/`。`workdir` 不应提交到公开仓库。
 
-返回码：`0` 本次扫描与提炼完成；`2` 部分来源失败；`1` 全部来源失败；`3` 配置、状态或文件错误；`4` 模型提炼仍有待完成任务。扫描错误优先于 `4`。失败来源的上次成功扫描时间会保留，邮件会点名覆盖缺口。
+返回码：`0` 本次扫描与提炼完成；`2` 部分来源失败；`1` 全部来源失败；`3` 配置、状态或文件错误；`4` 模型提炼仍有待完成任务。每周命令另以 `7` 表示累计论文表未能安全更新。扫描错误优先于 `4`。失败来源的上次成功扫描时间会保留，邮件会点名覆盖缺口。
 
 ## 论文总结与邮件
 
@@ -44,7 +45,7 @@ research-radar --config presets/corporate-finance-firm-boundaries.yaml --workdir
 
 ## 每周自动邮件
 
-仓库包含 GitHub Actions 云端任务，按北京时间每周一 09:00（UTC 01:00）运行，不依赖个人电脑开机。一次运行会扫描全部已启用来源、整理提炼结果，并只发送一封合并邮件。来源失败会在同一封邮件中标为覆盖不完整。
+仓库包含 GitHub Actions 云端任务，按北京时间每周一 09:00（UTC 01:00）运行，不依赖个人电脑开机。一次运行会扫描全部已启用来源、整理提炼结果、更新累计论文 CSV，并只发送一封合并邮件。CSV 内容未变化时不会产生新提交；自动数据提交带有 `[skip ci]`。来源失败会在同一封邮件中标为覆盖不完整。
 
 工作流默认关闭。启用前，在仓库 Secrets 中配置 `RADAR_SMTP_USERNAME`、`RADAR_SMTP_PASSWORD`、`RADAR_MAIL_TO` 和随机生成的 `RADAR_STATE_KEY`，再将仓库变量 `RADAR_WEEKLY_ENABLED` 设为 `true`。首次手动运行时选择 `initialize: true`，之后定时任务会恢复历史状态。SMTP 默认使用 `smtp.163.com:465` 和系统证书进行 TLS 校验；账号、授权码和收件地址不会写入配置文件或日志。
 
@@ -62,7 +63,7 @@ research-radar --config presets/corporate-finance-firm-boundaries.yaml --workdir
 
 ## 英文期刊目录与检索
 
-预设通过 `international_monitor.catalogs` 启用 `zufe-economics-finance-2020`。可审计的 101 本名称、ISSN 和级别保存在[期刊目录](research_radar/data/zufe_economics_finance_2020.yaml)，由所附校级文件的外文 TOP 表和一级 A `ECONOMICS, BUSINESS FINANCE` 表逐项提取。加载配置时会校验 ISSN 校验位、名称、级别和重复项。
+预设通过 `international_monitor.catalogs` 启用 `zufe-economics-finance-2020`。可审计的 8 本 TOP 期刊名称与 ISSN 保存在[期刊目录](research_radar/data/zufe_economics_finance_2020.yaml)，由所附校级文件的外文 TOP 表逐项提取。加载配置时会校验 ISSN 校验位、名称、级别和重复项；一级 A 期刊不再展开为检索源。
 
 程序调用 Crossref 的 `/journals/{issn}/works` 接口。每次查询覆盖“上次成功扫描时间前 14 天至本次扫描时间”的索引窗口，并限定出版日期在最近 180 天；重叠窗口处理延迟登记，持久状态按 DOI 去重。若结果超过单页 1000 条，来源会明确失败，程序不会静默截断。首次基线同样使用该窗口，但不进入新文邮件。Crossref 是开放 DOI 元数据注册系统，字段完整性取决于出版社登记；它不是出版社官网全文接口。
 
@@ -79,6 +80,7 @@ research-radar --config presets/corporate-finance-firm-boundaries.yaml --workdir
 
 - `research_radar/`：采集、材料读取、论文提炼、ResearchWork 状态与邮件。
 - `research_radar/data/`：双语经济概念、中国经济语境词表和英文目标期刊目录。
+- `reports/`：可在 GitHub 直接查看和下载的累计论文表。
 - `presets/`：可编辑的研究方向配置。
 - `references/`：来源、识别策略、论文生命周期与报告规范。
 - `schemas/`：监控配置和持久状态结构。

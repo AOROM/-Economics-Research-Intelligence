@@ -33,7 +33,7 @@ class ScanResult:
     coverage: str
 
 
-USER_AGENT = "EconomicsResearchRadar/0.5 (+https://github.com/AOROM/-Economics-Research-Intelligence)"
+USER_AGENT = "EconomicsResearchRadar/0.6 (+https://github.com/AOROM/-Economics-Research-Intelligence)"
 
 
 def request_official(

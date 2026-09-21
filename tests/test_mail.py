@@ -9,6 +9,7 @@ from unittest.mock import patch
 from research_radar.cli import run
 from research_radar.config import load_config
 from research_radar.mail import render_mail, write_mail
+from research_radar.paper_table import TABLE_FILENAME
 from research_radar.sources import ScanResult
 from research_radar.state import apply_observations, empty_state, save_json_atomic
 from research_radar.summaries import refresh_summaries
@@ -27,9 +28,10 @@ class MailTests(unittest.TestCase):
         config = load_config(preset)
         changes = {key: [] for key in ("new", "updated", "baseline", "enriched", "summary_updated", "possible_links")}
         report = render_mail(config, {"works": {}, "source_scans": {}}, changes, [], [], NOW, {})
-        self.assertIn("本次检索期刊名单（112 本", report.text)
+        self.assertIn("本次检索期刊名单（19 本", report.text)
         self.assertIn("American Economic Review", report.text)
-        self.assertIn("Journal of Financial Stability", report.text)
+        self.assertIn("Review of Financial Studies", report.text)
+        self.assertNotIn("英文一级A期刊", report.text)
         self.assertLess(report.text.index("American Economic Review"), report.text.index("来源覆盖"))
 
     def test_utf8_subject_plain_and_html_mime_parts_roundtrip(self):
@@ -135,6 +137,9 @@ class MailIntegrationTests(unittest.TestCase):
             self.assertIn("未重新扫描期刊", text)
             self.assertIn("融资成本降低2个百分点", text)
             self.assertIn("新增论文 0 篇", text)
+            table = (workdir / TABLE_FILENAME).read_text(encoding="utf-8")
+            self.assertIn("论文题目,来源期刊,作者,摘要", table)
+            self.assertIn("企业纵向一体化与融资约束,测试期刊,张三", table)
             self.assertEqual(len(next(iter(json.loads((workdir / "state.json").read_text(encoding="utf-8"))["works"].values()))["versions"]), 1)
 
     def test_failed_email_export_keeps_new_paper_notification_for_next_run(self):

@@ -155,7 +155,7 @@ chinese_monitor:
           abstract_selector: .abs
           article_metadata: true
 
-# 校级目录中的经济与金融外文 TOP 期刊 8 本、一级 A 期刊 93 本。
+# 校级目录中的经济与金融外文 TOP 期刊 8 本。
 # 目录条目按 ISSN 展开为 Crossref 期刊检索源；Crossref 提供 DOI 元数据，论文链接回到 DOI/出版社页面。
 international_monitor:
   catalogs:

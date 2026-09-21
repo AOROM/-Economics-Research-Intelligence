@@ -5,10 +5,9 @@
 The preset enables `zufe-economics-finance-2020`, extracted from the foreign-journal tables in *浙江财经大学中外文学术期刊定级管理办法（2020年修订）*:
 
 - 8 economics and finance journals from the foreign `TOP` table;
-- all 93 journals in the foreign level-A `ECONOMICS, BUSINESS FINANCE` table;
-- 101 unique titles and 101 valid, unique ISSNs in total.
+- 8 unique titles and 8 valid, unique ISSNs in total.
 
-The machine-readable names, ISSNs, tiers, scope, and counts are stored in `research_radar/data/zufe_economics_finance_2020.yaml`. Configuration loading checks the ISSN check digit and rejects duplicate names, IDs, or ISSNs. The original Word document is an input supplied by the user and is not committed to the public repository.
+The level-A table is outside the active scope and is not expanded into retrieval sources. The machine-readable names, ISSNs, tiers, scope, and counts are stored in `research_radar/data/zufe_economics_finance_2020.yaml`. Configuration loading checks the ISSN check digit and rejects duplicate names, IDs, or ISSNs. The original Word document is an input supplied by the user and is not committed to the public repository.
 
 ## Crossref retrieval
 
@@ -28,6 +27,10 @@ The date ranges are inclusive. A request selects only the metadata used by the m
 Crossref supplies bibliographic metadata deposited by publishers and other trusted sources. It is not the publisher website and does not guarantee an abstract or complete issue coverage. The report records the Crossref query as the visibility source and uses `https://doi.org/{doi}` as the paper link so readers reach the current DOI landing page.
 
 The implementation follows Crossref's official [REST API endpoint documentation](https://www.crossref.org/documentation/retrieve-metadata/rest-api/), [filter definitions](https://www.crossref.org/documentation/retrieve-metadata/rest-api/rest-api-filters/), and [API usage guidance](https://www.crossref.org/documentation/retrieve-metadata/rest-api/tips-for-using-the-crossref-rest-api/).
+
+## Cumulative summarized-paper table
+
+After summary processing, the monitor rebuilds `reports/discovered-and-summarized-papers.csv` from durable state. A journal paper enters the table only when its exact publication version has a nonempty, evidence-linked summary and its source remains in the active configuration. The four public columns are title, source journal, authors, and abstract. When a source supplies no abstract, the field contains a clearly labeled summary overview instead. Removed journal sources and title-only records are excluded.
 
 ## Optional feeds
 

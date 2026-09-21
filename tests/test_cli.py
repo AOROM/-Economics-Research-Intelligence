@@ -41,12 +41,12 @@ class CliTests(unittest.TestCase):
         self.assertEqual(sum(j.get("status") == "pending" for j in journals), 0)
         self.assertEqual(sum(j.get("status") == "blocked" for j in journals), 1)
         english = loaded["international_monitor"]["sources"]
-        self.assertEqual(len(english), 101)
+        self.assertEqual(len(english), 8)
         self.assertEqual(sum(source["tier"] == "TOP" for source in english), 8)
-        self.assertEqual(sum(source["tier"] == "一级A" for source in english), 93)
-        self.assertEqual(len({source["issn"] for source in english}), 101)
+        self.assertEqual(sum(source["tier"] == "一级A" for source in english), 0)
+        self.assertEqual(len({source["issn"] for source in english}), 8)
         self.assertEqual(english[0]["name"], "American Economic Review")
-        self.assertEqual(english[-1]["name"], "Journal of Financial Stability")
+        self.assertEqual(english[-1]["name"], "Review of Financial Studies")
 
     def test_pending_journal_is_reported_without_scanning(self):
         with tempfile.TemporaryDirectory() as temp:
