@@ -2,8 +2,13 @@ name: weekly literature email
 
 on:
   schedule:
-    # 09:00 every Monday in Asia/Shanghai (GitHub cron uses UTC).
-    - cron: "0 1 * * 1"
+    # GitHub cron uses UTC. Avoid the top of the hour, where scheduled
+    # workflows are more likely to be delayed or dropped. Later entries are
+    # idempotent recovery attempts; an accepted Monday period exits before a
+    # second scan or email.
+    - cron: "11 1 * * 1"  # Monday 09:11 Asia/Shanghai
+    - cron: "37 3 * * 1"  # Monday 11:37 Asia/Shanghai
+    - cron: "17 7 * * 1"  # Monday 15:17 Asia/Shanghai
   workflow_dispatch:
     inputs:
       initialize:
