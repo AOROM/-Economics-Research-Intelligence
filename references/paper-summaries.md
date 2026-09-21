@@ -18,6 +18,7 @@ research-radar --config presets/corporate-finance-firm-boundaries.yaml --workdir
 | `digests/<时间及批次>.md` | 原有 A–F 研究雷达，供已有工作流兼容使用 |
 | `summaries/<论文ID>/<提炼ID>.json` | 提炼历史及完整证据片段 |
 | `discovered-and-summarized-papers.csv` | 从状态重建的累计论文表，包含题目、来源期刊、作者和摘要 |
+| `weekly-run-status.json` | 最近一次被邮件服务器接受的周批次；不包含邮箱、授权码或论文状态 |
 | `state.json` | 论文、出版版本、当前卡片、提炼任务与待导出事件 |
 
 用 `--format html`、`--format text` 或 `--format markdown` 改变终端打印的主输出路径；所有格式仍然保存。Python 接口 `run()` 保留 `(返回码, Markdown 路径)`。
@@ -95,7 +96,7 @@ email:
 
 `from`、`to` 可省略。邮件开头按“中文期刊、英文 TOP”列出全部目标，随后只展示本期重点论文、中文期刊更新、英文期刊更新和覆盖缺口；同一工作每封邮件只展示一次。摘要后续补全本身不会把旧论文重新列为本期新文。正文中的外部文本经过 HTML 转义，链接限于 HTTP(S)。普通 `research-radar` 命令只输出草稿，不连接邮箱。
 
-仓库中的 `weekly-mail.yml` 每周一北京时间 09:11 调用 `research-radar-weekly`，并在 11:37、15:17 安排两次幂等补偿。只要本周批次已经被邮件服务器接受，补偿运行就会在检索和发信前退出。该命令从运行环境读取 SMTP 账号、授权码和唯一收件地址，通过 TLS 连接 `smtp.163.com:465`，发送同一批次的纯文本及 HTML 合并邮件。发送前，它把累计表发布到仓库的 `reports/discovered-and-summarized-papers.csv`；内容未变化时不创建提交。表格只纳入当前配置中的期刊、与提炼绑定的准确出版版本及含有实质提炼内容的论文。来源没有摘要时，摘要栏使用带明确标记的系统内容概括。敏感值只放在 GitHub Actions Secrets；配置、邮件归档和公开分支均不保存授权码。
+仓库中的 `weekly-mail.yml` 每周一北京时间 09:11 调用 `research-radar-weekly`，并在 11:37、15:17 安排两次幂等补偿。只要本周批次已经被邮件服务器接受，补偿运行就会在检索和发信前退出。该命令从运行环境读取 SMTP 账号、授权码和唯一收件地址，通过 TLS 连接 `smtp.163.com:465`，发送同一批次的纯文本及 HTML 合并邮件。发送前，它把累计表发布到仓库的 `reports/discovered-and-summarized-papers.csv`；邮件服务器确认接收后，再更新 `reports/weekly-run-status.json`。状态文件形成每周成功心跳，避免公开仓库长期没有内容变化时被平台停用计划任务。表格只纳入当前配置中的期刊、与提炼绑定的准确出版版本及含有实质提炼内容的论文。来源没有摘要时，摘要栏使用带明确标记的系统内容概括。敏感值只放在 GitHub Actions Secrets；配置、邮件归档和公开分支均不保存授权码。
 
 ## 状态与失败恢复
 

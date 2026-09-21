@@ -12,12 +12,38 @@ from .cli import run
 from .cloud_state import CloudStateError, GitHubState
 from .config import load_config
 from .delivery import (DeliveryError, SmtpSettings, check_period,
-                       resolve_uncertain, send_report)
+                       load_deliveries, resolve_uncertain, send_report)
 from .paper_table import GitHubPaperTable, PaperTableError, TABLE_FILENAME
+from .state import save_json_atomic
+
+
+STATUS_FILENAME = "weekly-run-status.json"
+STATUS_REPOSITORY_PATH = "reports/" + STATUS_FILENAME
 
 
 def monday_period(now: datetime) -> str:
     return (now.date() - timedelta(days=now.weekday())).isoformat()
+
+
+def publish_delivery_status(workdir: Path, period: str, monitor_id: str) -> str:
+    """Publish a public, secret-free heartbeat only for accepted delivery."""
+    record = load_deliveries(workdir)["periods"].get(period, {})
+    if record.get("status") != "accepted":
+        raise DeliveryError("An accepted delivery record is required for the weekly status")
+    payload = {
+        "schema_version": 1,
+        "monitor_id": monitor_id,
+        "period": period,
+        "status": "accepted",
+        "accepted_at": record.get("accepted_at") or record.get("resolved_at"),
+    }
+    destination = workdir / STATUS_FILENAME
+    save_json_atomic(destination, payload)
+    publisher = GitHubPaperTable(
+        path=STATUS_REPOSITORY_PATH,
+        commit_message="Record successful weekly monitor run [skip ci]",
+    )
+    return publisher.publish(destination)
 
 
 def execute(config_path: Path, workdir: Path, *, initialize: bool = False,
@@ -27,11 +53,13 @@ def execute(config_path: Path, workdir: Path, *, initialize: bool = False,
     zone = ZoneInfo(config.get("timezone", "Asia/Shanghai"))
     current = now.astimezone(zone) if now else datetime.now(zone)
     period = monday_period(current)
-    settings = SmtpSettings.from_env()
     storage = GitHubState(workdir)
     storage.restore(initialize=initialize)
     if check_period(workdir, period) == "accepted":
-        return 0, f"Weekly report for {period} was already accepted; no scan or resend was performed."
+        heartbeat = publish_delivery_status(workdir, period, config["monitor_id"])
+        return 0, (f"Weekly report for {period} was already accepted; no scan or resend was performed; "
+                   f"public run status {heartbeat}.")
+    settings = SmtpSettings.from_env()
 
     try:
         scan_code, digest_path = run(config_path, workdir, defer_report_ack=True)
@@ -50,10 +78,12 @@ def execute(config_path: Path, workdir: Path, *, initialize: bool = False,
     eml_path = workdir / "emails" / (digest_path.stem + ".eml")
     status = send_report(eml_path, workdir, period, settings,
                          current.isoformat(timespec="seconds"), storage.checkpoint)
+    heartbeat = publish_delivery_status(workdir, period, config["monitor_id"])
     if scan_code:
         return 0, (f"Email {status} for {period}; monitoring completed with coverage/status code {scan_code}; "
-                   f"cumulative paper table {table_status}.")
-    return 0, f"Email {status} for {period}; monitoring and delivery completed; cumulative paper table {table_status}."
+                   f"cumulative paper table {table_status}; public run status {heartbeat}.")
+    return 0, (f"Email {status} for {period}; monitoring and delivery completed; cumulative paper table "
+               f"{table_status}; public run status {heartbeat}.")
 
 
 def resolve(config_path: Path, workdir: Path, period: str, resolution: str,
@@ -65,6 +95,8 @@ def resolve(config_path: Path, workdir: Path, period: str, resolution: str,
     storage.restore()
     status = resolve_uncertain(workdir, period, resolution, current.isoformat(timespec="seconds"))
     storage.checkpoint()
+    if status == "accepted":
+        publish_delivery_status(workdir, period, config["monitor_id"])
     return f"Delivery for {period} was resolved as {status}."
 
 

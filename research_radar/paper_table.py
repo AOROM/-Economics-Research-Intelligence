@@ -110,13 +110,15 @@ def write_paper_table(state: dict, config: dict, destination: Path) -> int:
 
 
 class GitHubPaperTable:
-    """Publish the generated CSV to the default repository branch."""
+    """Publish a generated report file to the default repository branch."""
 
-    def __init__(self, *, branch: str = "main", path: str = REPOSITORY_PATH):
+    def __init__(self, *, branch: str = "main", path: str = REPOSITORY_PATH,
+                 commit_message: str = "Update cumulative literature table [skip ci]"):
         self.repository = os.environ.get("GITHUB_REPOSITORY", "")
         self.token = os.environ.get("GITHUB_TOKEN", "")
         self.branch = branch
         self.path = path
+        self.commit_message = commit_message
         parts = PurePosixPath(path).parts
         safe_path = parts and not path.startswith("/") and "\\" not in path and ":" not in path
         safe_path = safe_path and all(part not in {"", ".", ".."} for part in parts)
@@ -125,6 +127,8 @@ class GitHubPaperTable:
             raise PaperTableError("Repository token must be configured for paper-table publishing")
         if not safe_path or not safe_branch:
             raise PaperTableError("Invalid repository table path or branch")
+        if not isinstance(commit_message, str) or not commit_message.strip() or "\n" in commit_message or "\r" in commit_message:
+            raise PaperTableError("Invalid repository commit message")
         self.base = "https://api.github.com/repos/" + self.repository
 
     def _request(self, method: str, path: str, body: dict | None = None,
@@ -172,7 +176,7 @@ class GitHubPaperTable:
             if existing == content:
                 return "unchanged"
         body = {
-            "message": "Update cumulative literature table [skip ci]",
+            "message": self.commit_message,
             "content": base64.b64encode(content).decode("ascii"),
             "branch": self.branch,
         }

@@ -12,7 +12,7 @@
 | 首次观察 | 首次成功扫描建立基线；后续扫描把新增工作与出版状态或版本变化分开。所有已发现记录进入状态库，包括低相关记录。 |
 | 经济学分析 | 双语概念词表、方法与数据名识别、多维相关度；提炼研究问题、数据、方法、发现、机制与适用条件，并保存原文证据。 |
 | 论文总结 | 默认本地原文摘录；可配置模型生成中文归纳。支持导入与已有论文版本绑定的正文；模型结果须通过引文与数字检查，失败可重试。 |
-| 累计论文表 | 仓库中的 [`reports/discovered-and-summarized-papers.csv`](reports/discovered-and-summarized-papers.csv) 累计列出已经完成提炼的目标期刊论文，包括题目、期刊、作者和摘要；周任务按状态重建并自动更新。 |
+| 累计论文表 | 仓库中的 [`reports/discovered-and-summarized-papers.csv`](reports/discovered-and-summarized-papers.csv) 累计列出已经完成提炼的目标期刊论文，包括题目、期刊、作者和摘要；周任务按状态重建并自动更新。[运行状态](reports/weekly-run-status.json)记录最近一次被邮件服务器接受的周批次。 |
 | 邮件交付 | 默认生成 `.eml`、HTML、纯文本和 A–F Markdown 周报；云端任务可在每周一合并为一封邮件，经 TLS SMTP 投递。 |
 
 中文采集同时支持静态 HTML、AJCASS 官方公开接口和北京大学“期次页面到论文 PDF”的两级结构。扫描失败、证书失效或栏目没有匹配到论文链接时，会显示为覆盖不完整，不会变成“无新文”。`blocked` 期刊会在邮件中说明官网阻塞及证据边界。英文检索依赖出版社向 Crossref 登记的元数据，不能替代出版社官网或全文数据库的完整性证明。论文总结明确标注标题、摘要或用户提供正文的材料范围；缺失字段保持待核实。
@@ -45,7 +45,7 @@ research-radar --config presets/corporate-finance-firm-boundaries.yaml --workdir
 
 ## 每周自动邮件
 
-仓库包含 GitHub Actions 云端任务，按北京时间每周一 09:11 运行，不依赖个人电脑开机；若主运行没有完成，还会在 11:37 和 15:17 自动补偿。每周批次具有幂等检查：首次成功后，后续补偿会在扫描和发信前退出，因此每周只发送一封合并邮件。一次有效运行会扫描全部已启用来源、整理提炼结果并更新累计论文 CSV。CSV 内容未变化时不会产生新提交；自动数据提交带有 `[skip ci]`。来源失败会在同一封邮件中标为覆盖不完整。
+仓库包含 GitHub Actions 云端任务，按北京时间每周一 09:11 运行，不依赖个人电脑开机；若主运行没有完成，还会在 11:37 和 15:17 自动补偿。每周批次具有幂等检查：首次成功后，后续补偿会在扫描和发信前退出，因此每周只发送一封合并邮件。一次有效运行会扫描全部已启用来源、整理提炼结果并更新累计论文 CSV。邮件服务器确认接收后，任务还会更新不含邮箱或业务数据的周运行状态文件；这既提供公开的成功记录，也避免公开仓库因长期无提交而停用定时工作流。自动数据提交带有 `[skip ci]`。来源失败会在同一封邮件中标为覆盖不完整。
 
 工作流默认关闭。启用前，在仓库 Secrets 中配置 `RADAR_SMTP_USERNAME`、`RADAR_SMTP_PASSWORD`、`RADAR_MAIL_TO` 和随机生成的 `RADAR_STATE_KEY`，再将仓库变量 `RADAR_WEEKLY_ENABLED` 设为 `true`。首次手动运行时选择 `initialize: true`，之后定时任务会恢复历史状态。SMTP 默认使用 `smtp.163.com:465` 和系统证书进行 TLS 校验；账号、授权码和收件地址不会写入配置文件或日志。
 
@@ -80,7 +80,7 @@ research-radar --config presets/corporate-finance-firm-boundaries.yaml --workdir
 
 - `research_radar/`：采集、材料读取、论文提炼、ResearchWork 状态与邮件。
 - `research_radar/data/`：双语经济概念、中国经济语境词表和英文目标期刊目录。
-- `reports/`：可在 GitHub 直接查看和下载的累计论文表。
+- `reports/`：可在 GitHub 直接查看和下载的累计论文表及周运行状态。
 - `presets/`：可编辑的研究方向配置。
 - `references/`：来源、识别策略、论文生命周期与报告规范。
 - `schemas/`：监控配置和持久状态结构。

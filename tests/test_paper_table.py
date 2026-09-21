@@ -78,6 +78,20 @@ class PaperTableTests(unittest.TestCase):
                 self.assertEqual(publisher.publish(source), "unchanged")
             request.assert_called_once()
 
+    def test_repository_publisher_accepts_a_specific_audit_commit_message(self):
+        env = {"GITHUB_REPOSITORY": "owner/repo", "GITHUB_TOKEN": "token"}
+        with tempfile.TemporaryDirectory() as temp, patch.dict("os.environ", env, clear=True):
+            source = Path(temp) / "status.json"
+            source.write_text("{}\n", encoding="utf-8")
+            publisher = GitHubPaperTable(
+                path="reports/weekly-run-status.json",
+                commit_message="Record successful weekly monitor run [skip ci]",
+            )
+            with patch.object(publisher, "_request", side_effect=[None, {}]) as request:
+                self.assertEqual(publisher.publish(source), "created")
+            self.assertEqual(request.call_args_list[1].args[2]["message"],
+                             "Record successful weekly monitor run [skip ci]")
+
     def test_repository_publisher_reads_large_existing_file_through_blob_api(self):
         env = {"GITHUB_REPOSITORY": "owner/repo", "GITHUB_TOKEN": "token"}
         with tempfile.TemporaryDirectory() as temp, patch.dict("os.environ", env, clear=True):
