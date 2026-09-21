@@ -65,6 +65,7 @@ jobs:
               "authorization_code_printable_ascii": bool(code) and all(33 <= ord(char) <= 126 for char in code),
               "authorization_code_surrounding_quotes": len(code) >= 2 and code[0] in "'\"" and code[-1] == code[0],
               "authorization_code_surrounding_whitespace": raw_code != code,
+              "authorization_code_uppercase_letters_only": bool(re.fullmatch(r"[A-Z]{16}", code)),
               "recipient_configured": bool(recipient),
               "sender_matches_recipient": bool(username) and username.casefold() == recipient.casefold(),
               "username_is_full_163_address": bool(re.fullmatch(r"[^@\s]+@163\.com", username, re.IGNORECASE)),
